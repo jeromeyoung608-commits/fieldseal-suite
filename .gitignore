@@ -32,3 +32,6 @@ cli/test/fixtures/.tmp/
 
 # Pre-built release binaries: attached to GitHub Releases, never committed
 tools/build/dist/
+
+# Golden case fixtures are test inputs, not build output — they must ship in the repo.
+!cli/test/fixtures/golden/*.zip

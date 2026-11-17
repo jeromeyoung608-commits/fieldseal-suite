@@ -54,25 +54,45 @@ const major = Number(process.versions.node.split('.')[0]);
 record('runtime.node', 'Node.js version', major >= 18 ? 'ok' : 'fail', process.version + ' (requires >= 18)');
 
 // 2. Required delivery files.
-const REQUIRED = [
+// `tools/build/dist/` holds BUILT artifacts (pkg binaries + Ed25519 sums). They are
+// attached to GitHub Releases, never committed, so a pristine clone legitimately has
+// no dist/. Absence is therefore a warning in a source checkout — but if dist exists
+// and a required file inside it is missing, that is still a hard failure.
+const DIST = path.join(ROOT, 'tools/build/dist');
+const hasDist = existsSync(DIST);
+const SOURCE_FILES = [
   'pwa/index.html', 'pwa/sw.js', 'pwa/privacy.html', 'pwa/backup.html',
   'pwa/ui/page-chrome.js', 'cli/bin/audit.js', 'cli/bin/backup.mjs', 'cli/bin/serve.mjs',
-  'cli/test/test-runner.js', 'tools/build/dist/manifest.json',
-  'tools/build/dist/SHA256SUMS', 'tools/build/dist/SHA256SUMS.sig',
-  'tools/build/dist/RELEASE-PUBLIC-KEY.pem', 'docs/RELEASE-ROLLBACK.md',
+  'cli/test/test-runner.js', 'docs/RELEASE-ROLLBACK.md',
   'pwa/legal/DPA-TEMPLATE.md', 'pwa/legal/SUPPORT-SLA.md',
   'pwa/legal/VPAT-2.5-EU.md', 'pwa/legal/DATA-RESIDENCY.md', 'README.md', 'SECURITY.md'
 ];
-const missing = REQUIRED.filter((f) => !existsSync(path.join(ROOT, f)));
-record('delivery.files', 'Required delivery files', missing.length ? 'fail' : 'ok', missing.length ? 'missing: ' + missing.join(', ') : REQUIRED.length + ' files present');
+const DIST_FILES = [
+  'manifest.json', 'SHA256SUMS', 'SHA256SUMS.sig', 'RELEASE-PUBLIC-KEY.pem'
+];
+const missingSource = SOURCE_FILES.filter((f) => !existsSync(path.join(ROOT, f)));
+const missingDist = DIST_FILES.filter((f) => !existsSync(path.join(DIST, f)));
+if (missingSource.length) {
+  record('delivery.files', 'Required delivery files', 'fail', 'missing: ' + missingSource.join(', '));
+} else if (missingDist.length && hasDist) {
+  record('delivery.files', 'Required delivery files', 'fail', 'missing in dist: ' + missingDist.join(', '));
+} else if (missingDist.length) {
+  record('delivery.files', 'Required delivery files', 'warn',
+    'source checkout: release binaries not built yet (run tools/build/build-binaries.mjs)');
+} else {
+  record('delivery.files', 'Required delivery files', 'ok',
+    (SOURCE_FILES.length + DIST_FILES.length) + ' files present');
+}
 
-// 3. Release integrity.
+// 3. Release integrity. Only meaningful once dist/ has been built.
 const sig = nodeScript('tools/release/release-tool.mjs', ['verify-signature']);
-record('release.signature', 'Ed25519 release signature', sig.status === 0 ? 'ok' : 'fail',
-  sig.status === 0 ? 'verified' : (sig.stderr || sig.stdout || 'failed').trim().slice(0, 300));
+record('release.signature', 'Ed25519 release signature', !hasDist ? 'warn' : (sig.status === 0 ? 'ok' : 'fail'),
+  !hasDist ? 'skipped: no dist/ in a source checkout'
+    : (sig.status === 0 ? 'verified' : (sig.stderr || sig.stdout || 'failed').trim().slice(0, 300)));
 const bin = nodeScript('tools/build/verify-binaries.mjs');
-record('release.binaries', 'Dist binary digests', bin.status === 0 ? 'ok' : 'fail',
-  bin.status === 0 ? 'all binaries verified' : (bin.stderr || bin.stdout || 'failed').trim().slice(0, 300));
+record('release.binaries', 'Dist binary digests', !hasDist ? 'warn' : (bin.status === 0 ? 'ok' : 'fail'),
+  !hasDist ? 'skipped: no dist/ in a source checkout'
+    : (bin.status === 0 ? 'all binaries verified' : (bin.stderr || bin.stdout || 'failed').trim().slice(0, 300)));
 
 // 4. Core self-tests (fast, no browser needed).
 for (const [id, label, rel] of [
