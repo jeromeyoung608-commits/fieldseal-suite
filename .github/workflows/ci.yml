@@ -46,11 +46,15 @@ jobs:
       - name: Reproducible build self-test
         run: node tools/build/repro-build.mjs --self-test
 
-      - name: Installer dry-run
+      - name: Installer preflight (must refuse an unsigned tree)
         run: |
-          chmod +x install.sh
-          ./install.sh --verify-only || true
-          test -x install.sh
+          test -x install.sh || chmod +x install.sh
+          # dist/ is not committed, so a CI checkout is unsigned and the installer
+          # MUST fail closed here. Installing anyway would be the bug.
+          if ./install.sh --verify-only; then
+            echo "FAIL: installer accepted an unsigned tree"; exit 1
+          fi
+          echo "OK: installer refused unsigned tree (fail closed)"
 
   docker:
     runs-on: ubuntu-latest

@@ -67,9 +67,15 @@ try {
  r = run('cli/bin/doctor.mjs', ['--bundle', bundle]);
  ok(r.status === 0 && existsSync(bundle), 'doctor writes a diagnostic bundle');
 
- // 3. Installer preflight (no files written).
+ // 3. Installer preflight (no files written). The installer must verify the signed
+ // release before touching disk, so in a source checkout with no built dist/ its
+ // correct behaviour is to REFUSE — fail closed — not to install anyway.
  r = run('./install.sh', ['--verify-only'], true);
+ if (existsSync(path.join(ROOT, 'tools/build/dist'))) {
  ok(r.status === 0 && /INSTALL-VERIFY-OK/.test(r.stdout), 'installer preflight verifies the signed release');
+ } else {
+ ok(r.status !== 0, 'installer refuses an unsigned source checkout (fail closed)');
+ }
 
  // 4. Local server: serves pages/legal docs offline, refuses traversal.
  const port = 18000 + (process.pid % 1000);
