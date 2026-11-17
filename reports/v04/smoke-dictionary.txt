@@ -1,0 +1,6 @@
+### Result
+{"dictionaries":"dictionaries 1","dictAudit":true,"v04Block":true}
+### Ran Playwright code
+```js
+await (async () => { await page.locator('#v04-dict-id').fill('condition'); await page.locator('#v04-dict-vals').fill('sealed,damaged'); const b = page.getByRole('button', { name: /字典新增/ }); try { await Promise.all([page.waitForEvent('framenavigated', { timeout: 8000 }).catch(() => {}), b.click()]); } catch (e) { /* reload */ } await page.waitForLoadState('domcontentloaded'); const body = await page.locator('body').innerText(); return { dictionaries: (body.match(/dictionaries \d+/) || [])[0], dictAudit: body.includes('DICTIONARY_ADD'), v04Block: body.includes('v0.4 增量功能') }; })(page);
+```

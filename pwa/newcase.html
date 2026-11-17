@@ -1,0 +1,203 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>New Case - FieldSeal Suite</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+</head>
+<body>
+<div class="wrap">
+ <div class="topbar">
+ <div class="brand">
+ <img src="./assets/icon.svg" alt="FieldSeal">
+ <div>
+ <h1 id="page-title">New Case</h1>
+ <p><span>Create case</span> · <a href="./cases.html">Cases</a></p>
+ </div>
+ </div>
+ <span class="net-state" id="net-state">Offline-ready</span>
+ <span id="lang-switch" class="lang-switch-host"></span>
+ </div>
+
+ <a class="back-link" href="./cases.html">&larr; Case list</a>
+
+ <div class="card" id="quick-boot-card" hidden>
+ <h2>Quick Capture</h2>
+ <p class="hint" id="quick-boot-status">Opening camera ...</p>
+ </div>
+
+ <div class="card">
+ <h2>Case metadata</h2>
+ <label class="field"><span>Title</span><input type="text" id="title" placeholder="e.g. incident #2026-114"></label>
+ <div class="grid-2">
+ <label class="field"><span>IANA timezone</span><input type="text" id="tz" placeholder="UTC"></label>
+ <label class="field"><span>Operator / optional</span><input type="text" id="operator" placeholder="Alice"></label>
+ </div>
+ </div>
+
+ <div class="card" id="operator-identity-card">
+ <h2>Operator Identity</h2>
+ <p class="hint">rootHash / sealHash / Optional audit-only metadata; excluded from rootHash / sealHash; never a trust root.</p>
+ <label class="field"><span>Saved template</span><select id="operator-identity-select"></select></label>
+ <div class="grid-2">
+ <label class="field"><span>Operator ID</span><input type="text" id="oi-operatorId" placeholder="OP-1001"></label>
+ <label class="field"><span>Full name</span><input type="text" id="oi-fullName" placeholder="Yesne Doe"></label>
+ <label class="field"><span>Badge ID</span><input type="text" id="oi-badgeId"></label>
+ <label class="field"><span>Org</span><input type="text" id="oi-org"></label>
+ <label class="field"><span>Role</span><input type="text" id="oi-role"></label>
+ <label class="field"><span>Contact ref</span><input type="text" id="oi-contactRef"></label>
+ <label class="field"><span>Signature fingerprint</span><input type="text" id="oi-signatureFingerprint"></label>
+ </div>
+ <div class="row">
+ <button class="btn btn-ghost" id="oi-save-template" type="button">Save as template</button>
+ </div>
+ </div>
+
+ <div class="card" id="template-card">
+ <h2>Template</h2>
+ <p class="hint">Base templates are calibrated (NIST / OSAC). Your own templates come from Template Management. / NIST / OSAC</p>
+ <label class="field"><span>Template</span><select id="template"></select></label>
+ <label class="field"><span>Capture mode</span>
+ <select id="mode">
+ <option value="full">Full / all fields</option>
+ <option value="quick">Quick / required fields only</option>
+ </select>
+ </label>
+ <div class="notice" id="emergency-note" hidden>Emergency: case starts as <span class="mono">pending-configuration</span>. Schema (template) is added later.</div>
+ </div>
+
+ <div class="row">
+ <button class="btn btn-primary" id="create-btn">Create case</button>
+ <a class="btn btn-ghost" href="./cases.html">Cancel</a>
+ </div>
+
+ <footer>
+ <p data-lang="en"><strong>EN</strong> The case is stored locally (IndexedDB). Each later capture produces a separate, CLI-verifiable <span class="mono">fieldseal-evidence-v0.2</span> package.</p>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</div>
+
+<script type="module">
+ import './core/i18n.js';
+ import { createCase, META_TEMPLATES } from './core/case-manifest.js';
+ import { putCase, available } from './helpers/case-store.js';
+ import { el, showToast, registerServiceWorker, setOfflineIndicator } from './ui/components.js';
+ import { loadOperatorIdentities, upsertOperatorIdentity, deleteOperatorIdentity } from './helpers/operator-profiles.js';
+
+ const $ = (id) => document.getElementById(id);
+ const CUSTOM_KEY = 'fieldseal-custom-templates';
+
+ registerServiceWorker();
+ setOfflineIndicator();
+
+ const params = new URLSearchParams(location.search);
+ const origin = params.get('origin') === 'emergency' ? 'emergency' : 'standard';
+ $('page-title').textContent = origin === 'emergency' ? 'Emergency Quick Capture' : 'New Case';
+ if (origin === 'emergency') {
+   for (const card of document.querySelectorAll('.card')) card.hidden = true;
+   $('quick-boot-card').hidden = false;
+   $('create-btn').hidden = true;
+ }
+
+ function loadCustomTemplates() {
+ try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]'); } catch { return []; }
+ }
+
+ function buildTemplateOptions() {
+ const sel = $('template');
+ sel.textContent = '';
+ for (const [key, tpl] of Object.entries(META_TEMPLATES)) {
+ if (key === 'custom') continue;
+ sel.appendChild(el('option', { value: 'builtin:' + key, text: tpl.label + ' (' + key + ')' }));
+ }
+ const customs = loadCustomTemplates();
+ for (const ct of customs) {
+ sel.appendChild(el('option', { value: 'custom:' + ct.id, text: ct.label + '[eigene' }));
+ }
+ }
+ buildTemplateOptions(); // v0.5 operatorIdentity (additive, non-trust metadata). Pick a saved template or fill manually; the / chosen values are written into caseMeta.operatorIdentity (excluded from rootHash / sealHash).
+ const OI_KEYS = ['operatorId', 'fullName', 'badgeId', 'org', 'role', 'contactRef', 'signatureFingerprint'];
+ function buildIdentitySelect() {
+ const sel = $('operator-identity-select');
+ sel.textContent = '';
+ sel.appendChild(el('option', { value: '', text: 'None' }));
+ for (const id of loadOperatorIdentities()) sel.appendChild(el('option', { value: id.operatorId, text: id.operatorId + ' \u2014 ' + (id.fullName || '') }));
+ }
+ function fillIdentityFromTemplate() {
+ const id = loadOperatorIdentities().find((x) => x.operatorId === $('operator-identity-select').value);
+ if (!id) return;
+ for (const k of OI_KEYS) $('oi-' + k).value = id[k] || '';
+ }
+ function readIdentity() {
+ const id = {};
+ for (const k of OI_KEYS) { const v = $('oi-' + k).value.trim(); if (v) id[k] = v; }
+ return id;
+ }
+ $('operator-identity-select').addEventListener('change', fillIdentityFromTemplate);
+ $('oi-save-template').addEventListener('click', () => {
+ const id = readIdentity();
+ if (!id.operatorId) { showToast('Operator ID required', 'warn'); return; }
+ upsertOperatorIdentity(id);
+ buildIdentitySelect();
+ showToast('Template saved', 'ok');
+ });
+ buildIdentitySelect();
+
+ try { $('tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { $('tz').value = 'UTC'; }
+
+ async function startEmergencyQuickCapture() {
+   try {
+     if (!available()) throw new Error('IndexedDB not available');
+     const now = new Date();
+     const c = await createCase({ origin: 'emergency', caseMeta: { title: 'Quick Capture ' + now.toLocaleString('en-GB') }, ianaTz: $('tz').value.trim() || 'UTC', operator: 'quick-capture' });
+     await putCase(c);
+     location.replace('./case-capture.html?id=' + encodeURIComponent(c.packageId) + '&quick=1&v=18');
+   } catch (e) {
+     for (const card of document.querySelectorAll('.card')) card.hidden = false;
+     $('quick-boot-card').hidden = true;
+     $('create-btn').hidden = false;
+     showToast('Quick Capture failed: ' + e.message, 'error');
+   }
+ }
+
+ if (origin === 'emergency') startEmergencyQuickCapture();
+
+ $('create-btn').addEventListener('click', async () => {
+ if (!available()) { showToast('IndexedDB not available', 'error'); return; }
+ const title = $('title').value.trim();
+ if (!title) { showToast('Title required', 'warn'); return; }
+ try {
+ let opts = { origin, caseMeta: { title }, ianaTz: $('tz').value.trim() || 'UTC', operator: $('operator').value.trim() || 'system' };
+ const oi = readIdentity();
+ if (Object.keys(oi).length) opts.caseMeta.operatorIdentity = oi;
+ if (origin === 'standard') {
+ opts.mode = $('mode').value === 'quick' ? 'quick' : 'full';
+ const val = $('template').value;
+ if (val.startsWith('builtin:')) opts.metaTemplate = val.slice('builtin:'.length);
+ else if (val.startsWith('custom:')) {
+ const ct = loadCustomTemplates().find((t) => t.id === val.slice('custom:'.length));
+ opts.metaTemplate = 'custom';
+ opts.customGlobalFields = ct ? ct.globalFields : [];
+ opts.customItemFields = ct ? ct.itemFields : [];
+ }
+ }
+ const c = await createCase(opts);
+ await putCase(c);
+ showToast('Case created', 'ok');
+ location.href = './case-detail.html?id=' + encodeURIComponent(c.packageId);
+ } catch (e) {
+ showToast('Creation failed' + e.message, 'error');
+ }
+ });
+</script>
+</body>
+</html>

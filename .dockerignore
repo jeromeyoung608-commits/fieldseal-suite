@@ -1,0 +1,9 @@
+tools/build/dist
+reports
+.fixtures
+.fieldseal-backup-demo
+.fieldseal-rights
+.playwright-cli
+node_modules
+.git
+archive-data

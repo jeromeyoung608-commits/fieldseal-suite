@@ -1,0 +1,125 @@
+<!doctype html>
+<!--
+  FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+  SPDX-License-Identifier: MIT
+  License: MIT
+  Ownership: FieldSeal Suite project / 项目归属：FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{TITLE}}</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7; --card: #ffffff; --ink: #1d1d1f; --muted: #6e6e73;
+    --line: #e5e5ea; --accent: #0a6cff;
+    --ok-bg: #e3f6e8; --ok-ink: #1a6b32;
+    --bad-bg: #fdeaea; --bad-ink: #a32121;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px; background: var(--bg); color: var(--ink);
+         font: 15px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+  main { max-width: 860px; margin: 0 auto 28px; background: var(--card); padding: 36px 40px;
+         border: 1px solid var(--line); border-radius: var(--radius);
+         box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+  h1 { font-size: 23px; margin: 0 0 6px; font-weight: 650; letter-spacing: -.01em; }
+  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted);
+       margin: 30px 0 10px; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-weight: 650; }
+  .meta { color: var(--muted); font-size: 13px; margin: 0 0 22px; }
+  .langsel { max-width: 860px; margin: 0 auto 12px; display: flex; gap: 16px; align-items: center;
+             color: var(--muted); font-size: 13px; }
+  .langsel label { cursor: pointer; user-select: none; }
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .badge { display: inline-block; padding: 7px 16px; border-radius: 999px;
+           font-size: 14px; font-weight: 650; letter-spacing: .02em; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok-ink); }
+  .badge.bad { background: var(--bad-bg); color: var(--bad-ink); }
+  table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+  th, td { text-align: left; padding: 11px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { width: 170px; color: var(--muted); font-weight: 550; }
+  tr:last-child th, tr:last-child td { border-bottom: none; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+          font-size: 12px; word-break: break-all; }
+  pre { background: #f6f7f9; padding: 18px; border: 1px solid var(--line); border-radius: 10px;
+        overflow-x: auto; white-space: pre-wrap; word-break: break-word; margin: 0; }
+  .note { color: var(--muted); font-size: 13px; }
+  .reservation { color: var(--bad-ink); font-size: 13px; }
+  footer { max-width: 860px; margin: 0 auto; color: var(--muted); font-size: 12px;
+           border-top: 1px solid #d2d2d7; padding-top: 16px; line-height: 1.5; }
+  footer p { margin: 0 0 8px; }
+  /* Static, dependency-free i18n: a radio group toggles which language spans show. No script. */
+  .i18n { display: none; }
+  #l-en:checked ~ main .i18n-en,
+  #l-de:checked ~ main .i18n-de,
+  #l-fr:checked ~ main .i18n-fr,
+  #l-es:checked ~ main .i18n-es { display: inline; }
+  .disc { display: none; }
+  #l-en:checked ~ footer .disc-en { display: block; }
+  #l-de:checked ~ footer .disc-de { display: block; }
+  #l-fr:checked ~ footer .disc-fr { display: block; }
+  #l-es:checked ~ footer .disc-es { display: block; }
+  @media (max-width: 640px) {
+    body { padding: 12px; }
+    main { padding: 22px 18px; border-radius: 10px; }
+  }
+  @media print {
+    body { background: #fff; padding: 0; }
+    main { border: none; box-shadow: none; }
+    h2 { break-after: avoid; }
+    pre { border-color: #ccc; }
+  }
+</style>
+</head>
+<body>
+<div class="langsel">
+  <span>Language / 语言:</span>
+  <label><input type="radio" name="lang" id="l-en" checked> EN</label>
+  <label><input type="radio" name="lang" id="l-de"> DE</label>
+  <label><input type="radio" name="lang" id="l-fr"> FR</label>
+  <label><input type="radio" name="lang" id="l-es"> ES</label>
+</div>
+<main>
+  <div class="topbar">
+    <h1><span class="i18n i18n-en">FieldSeal Suite — Audit Report</span><span class="i18n i18n-de">FieldSeal Suite — Prüfbericht</span><span class="i18n i18n-fr">FieldSeal Suite — Rapport d’audit</span><span class="i18n i18n-es">FieldSeal Suite — Informe de auditoría</span></h1>
+  </div>
+  <p class="meta">Generated: {{GENERATED_AT}} &middot; Source: {{SOURCE}}</p>
+
+  <h2><span class="i18n i18n-en">Result</span><span class="i18n i18n-de">Ergebnis</span><span class="i18n i18n-fr">Résultat</span><span class="i18n i18n-es">Resultado</span></h2>
+  <span class="badge {{RESULT_CLASS}}">{{CORE_RESULT}}</span>
+
+  <h2><span class="i18n i18n-en">Package</span><span class="i18n i18n-de">Paket</span><span class="i18n i18n-fr">Paquet</span><span class="i18n i18n-es">Paquete</span></h2>
+  <table>
+    <tbody>
+      <tr><th><span class="i18n i18n-en">Package type</span><span class="i18n i18n-de">Pakettyp</span><span class="i18n i18n-fr">Type de paquet</span><span class="i18n i18n-es">Tipo de paquete</span></th><td>{{PACKAGE_TYPE}}</td></tr>
+      <tr><th><span class="i18n i18n-en">Package ID</span><span class="i18n i18n-de">Paket-ID</span><span class="i18n i18n-fr">ID du paquet</span><span class="i18n i18n-es">ID del paquete</span></th><td class="mono">{{PACKAGE_ID}}</td></tr>
+      <tr><th><span class="i18n i18n-en">Root hash</span><span class="i18n i18n-de">Root-Hash</span><span class="i18n i18n-fr">Hash racine</span><span class="i18n i18n-es">Hash raíz</span></th><td class="mono">{{ROOT_HASH}}</td></tr>
+    </tbody>
+  </table>
+
+  {{SIGN_MODE_SECTION}}
+  {{TIMEZONE_SEC}}
+  {{PARTIES_SEC}}
+  {{REVISION_SEC}}
+  {{SUPPLEMENT_SEC}}
+  {{CUSTODY_SEC}}
+
+  <h2><span class="i18n i18n-en">Verification details</span><span class="i18n i18n-de">Prüfdetails</span><span class="i18n i18n-fr">Détails de vérification</span><span class="i18n i18n-es">Detalles de verificación</span></h2>
+  <pre class="mono">{{EXTRAS_JSON}}</pre>
+
+  {{DISCLAIMER_SEC}}
+
+  <h2><span class="i18n i18n-en">Note</span><span class="i18n i18n-de">Hinweis</span><span class="i18n i18n-fr">Note</span><span class="i18n i18n-es">Nota</span></h2>
+  <p class="note"><span class="i18n i18n-en">In your browser: Print &rarr; Save as PDF. No PDF library is used.</span><span class="i18n i18n-de">Im Browser: Drucken &rarr; Als PDF sichern. Keine PDF-Bibliothek.</span><span class="i18n i18n-fr">Dans le navigateur : Imprimer &rarr; Enregistrer en PDF. Aucune bibliothèque PDF.</span><span class="i18n i18n-es">En el navegador: Imprimir &rarr; Guardar como PDF. Sin biblioteca PDF.</span></p>
+</main>
+<footer>
+  <p class="disc disc-en">This tool produces tamper-resistant records. It is NOT a qualified electronic signature under eIDAS and provides no legal advice. Admissibility in court is not guaranteed; device timestamps may be altered and identity of all participants must be verified by the user.</p>
+  <p class="disc disc-de">Dieses Werkzeug erstellt eine manipulationsgeschützte Aufzeichnung. Es ist keine qualifizierte elektronische Signatur nach eIDAS und keine Rechtsberatung. Gerichtliche Zulässigkeit ist nicht garantiert; Gerätezeitstempel können manipuliert werden.</p>
+  <p class="disc disc-fr">Cet outil produit des enregistrements résistants à la falsification. Ce n'est pas une signature électronique qualifiée au sens de l'eIDAS et ne constitue pas un avis juridique. L'admissibilité en justice n'est pas garantie ; les horodatages des appareils peuvent être altérés.</p>
+  <p class="disc disc-es">Esta herramienta genera registros resistentes a la manipulación. No es una firma electrónica cualificada conforme a eIDAS y no constituye asesoramiento jurídico. La admisibilidad judicial no está garantizada; las marcas de tiempo del dispositivo pueden alterarse.</p>
+    <p class="attribution">FieldSeal Suite v0.5 · Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. · License: MIT · Ownership: FieldSeal Suite project / 项目归属：FieldSeal Suite</p>
+  </footer>
+</body>
+</html>

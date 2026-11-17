@@ -1,0 +1,40 @@
+- generic [ref=e2]:
+  - generic [ref=e3]:
+    - generic [ref=e4]:
+      - img "FieldSeal" [ref=e5]
+      - generic [ref=e6]:
+        - heading "Case Management" [level=1] [ref=e7]
+        - paragraph [ref=e8]:
+          - text: Vor-Ort-Beweis als Fall strukturieren / 以案卷组织现场取证 ·
+          - link "Start" [ref=e9] [cursor=pointer]:
+            - /url: ./index.html
+    - generic [ref=e10]: Offline-ready
+  - link "← Suite-Start / 套件首页" [ref=e11] [cursor=pointer]:
+    - /url: ./index.html
+  - generic [ref=e12]:
+    - heading "Neuer Fall / 新建案卷" [level=2] [ref=e13]
+    - paragraph [ref=e14]: Jede Aufnahme erzeugt weiterhin ein fieldseal-evidence-v0.2-Paket; der Fall aggregiert sie und bildet einen top-level sealHash. / 每次采集仍产出证据包，案卷聚合并生成顶层 sealHash。
+    - generic [ref=e15]:
+      - link "Neuer Fall (Standard) / 新建案卷（标准）" [ref=e16] [cursor=pointer]:
+        - /url: ./newcase.html?origin=standard
+      - link "Notfall-Schnellerfassung / 应急快速采集" [ref=e17] [cursor=pointer]:
+        - /url: ./newcase.html?origin=emergency
+    - generic [ref=e18]: "Notfall: Medien sofort sichern, Metadaten (Schema) spaeter ergaenzen. Fall startet als pending-configuration und kann erst nach Ergaenzung versiegelt werden. / 应急：先固化媒体，后补元数据；起点为待配置，补配置后方可封存。"
+  - generic [ref=e19]:
+    - generic [ref=e20]:
+      - heading "Fallliste / 案卷列表" [level=2] [ref=e21]
+      - button "Aktualisieren / 刷新" [ref=e22] [cursor=pointer]
+    - list [ref=e23]:
+      - listitem [ref=e24]: Noch keine Faelle. Legen Sie einen neuen Fall an. / 暂无案卷，请新建。
+  - generic [ref=e25]:
+    - heading "Vorlagen / 模板管理" [level=2] [ref=e26]
+    - paragraph [ref=e27]: 5 NIST/OSAC-kalibrierte Basisvorlagen (schreibgeschützt) plus eigene Vorlagen. / 5 套 NIST/OSAC 校准基础模板（只读）+ 自定义模板。
+    - link "Vorlagen oeffnen / 打开模板管理" [ref=e28] [cursor=pointer]:
+      - /url: ./templates.html
+  - contentinfo [ref=e29]:
+    - paragraph [ref=e30]:
+      - strong [ref=e31]: DE
+      - text: Dieses Werkzeug erstellt eine manipulationsgeschützte Aufzeichnung. Es ist keine qualifizierte elektronische Signatur nach eIDAS. Die Prüfung der Identität aller Beteiligten obliegt ausschließlich dem Nutzer. Gerätezeitstempel können manipuliert werden. Alle Daten bleiben lokal (IndexedDB).
+    - paragraph [ref=e32]:
+      - strong [ref=e33]: EN
+      - text: This tool produces tamper-resistant records. It is NOT a qualified electronic signature under eIDAS. Identity verification of all participants is the sole responsibility of the user. Device timestamps may be altered. All data stays local (IndexedDB).

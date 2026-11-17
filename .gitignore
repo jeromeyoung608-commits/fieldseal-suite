@@ -1,0 +1,34 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# Generated packages / reports — never commit evidence binaries
+*.zip
+report.html
+out/
+dist/
+
+# Generated CLI test fixtures (built by cli/test/test-runner.js)
+cli/test/fixtures/*.zip
+cli/test/fixtures/.tmp/
+
+# Editor / OS noise
+.idea/
+.vscode/
+*.swp
+
+# NOTE: cli/core and pwa/core must never contain package.json or package-lock.json.
+# Only pwa/helpers may declare dependencies (isolated helper layer).
+
+# Runtime stores produced by the CLI (GDPR rights request log, local state)
+.fieldseal-rights/
+
+# Local helper processes (pid files written by the local static server)
+*.pid
+
+# Browser automation session artefacts (logs / page snapshots / exported cases)
+.playwright-cli/
+
+# Pre-built release binaries: attached to GitHub Releases, never committed
+tools/build/dist/

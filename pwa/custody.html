@@ -1,0 +1,354 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Evidence Chain of Custody &amp; Metadata</title>
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+<style>
+ .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(220px,1fr)); gap:10px; }
+ .custody-entry, .custom-field { border:1px solid #e5e5ea; border-radius:10px; padding:12px; margin:10px 0; position:relative; }
+ .custody-entry .del, .custom-field .del { position:absolute; top:8px; right:8px; }
+ .mono { font-family:ui-monospace,Menlo,monospace; font-size:12px; word-break:break-all; }
+ .readonly-note { background:#fdeaea; color:#a32121; padding:10px 14px; border-radius:8px; margin-bottom:12px; }
+ #readonly-toggle:checked ~ .form-body { opacity:.6; pointer-events:none; }
+</style>
+</head>
+<body>
+<div class="wrap">
+ <div class="topbar">
+ <div class="brand">
+ <img src="./assets/icon.svg" alt="FieldSeal">
+ <div><h1 data-i18n="page.custody.title">Evidence Chain of Custody</h1><p>Independent metadata entry · <a href="./index.html">Start</a></p></div>
+ </div>
+ <span id="lang-switch" class="lang-switch-host"></span>
+ </div>
+
+ <div class="status-line">
+ <span class="status-badge" data-step="draft"></span>
+ <strong>CUSTODY ENTRY (standalone)</strong>
+ <span class="mono" id="status">No package loaded</span>
+ </div>
+
+ <div class="readonly-note" id="readonly-banner" hidden>
+ This evidence package is sealed. All custody metadata is locked and cannot be edited.
+ </div>
+
+ <section class="card">
+ <h2>1. Load evidence package</h2>
+ <div class="row">
+ <input type="file" id="evidence-input" accept=".zip" aria-label="Evidence package ZIP / ZIP" style="flex:1 1 260px">
+ <label class="field" style="margin:0"><span>Read-only mode (sealed)</span><input type="checkbox" id="readonly-toggle"></label>
+ </div>
+ </section>
+
+ <section class="card form-body">
+ <h2>2. Chain-of-custody metadata</h2>
+ <div class="grid">
+ <label class="field"><span>Quick Template</span>
+ <select id="metaTemplate">
+ <option value="">(none)</option>
+ <option value="forensic-investigator">Forensic Investigator</option>
+ <option value="compliance-auditor">Compliance Auditor</option>
+ <option value="legal-counsel">Legal Counsel</option>
+ <option value="devops-security">DevOps Security</option>
+ <option value="custom">Custom</option>
+ </select>
+ </label>
+ <label class="field"><span>Jurisdiction</span>
+ <input list="jurisdiction-list" id="jurisdiction" maxlength="64">
+ <datalist id="jurisdiction-list"><option value="US-CA"><option value="US-NY"><option value="EU-DE"><option value="EU-GB"><option value="SG"><option value="AU"></datalist>
+ </label>
+ <label class="field"><span>Case / Audit Reference</span><input id="caseReference" maxlength="128"></label>
+ <label class="field"><span>Evidence ID</span><input id="evidenceIdentifier" maxlength="128"></label>
+ <label class="field"><span>Custody Start (UTC)</span><input id="custodyStartUtc" placeholder="YYYY-MM-DD HH:mm:ss UTC"></label>
+ </div>
+ <label class="field" style="margin-top:10px"><span>Evidence Purpose (max 1024)</span>
+ <textarea id="evidencePurpose" maxlength="1024" placeholder="Forensic acquisition and investigation"></textarea></label>
+ <label class="field" style="margin-top:10px"><span>General Note (max 2048)</span>
+ <textarea id="custodyNote" maxlength="2048"></textarea></label>
+
+ <h3 style="margin-top:18px">Custody transfers</h3>
+ <div id="chain-list"></div>
+ <button class="btn" id="add-entry">+ Add Custody Entry</button>
+
+ <h3 style="margin-top:18px">Custom extra fields</h3>
+ <div id="custom-list"></div>
+ <button class="btn" id="add-custom">+ Add Custom Field</button>
+ </section>
+
+ <section class="card">
+ <h2>3. Export &amp; Save</h2>
+ <div class="row">
+ <button class="btn" id="copy-json">Copy JSON</button>
+ <button class="btn btn-ghost" id="load-json">Load Preset JSON</button>
+ <label class="field" style="margin:0"><span>Save into package</span><input type="checkbox" id="recompute-hash" checked></label>
+ <button class="btn btn-primary" id="save-btn">Save</button>
+ </div>
+ <p class="hint" id="save-hint">All fields are bound into the package root hash. Front-end performs no business validation; kernel errors are shown verbatim.</p>
+ <textarea id="json-area" aria-label="Custody metadata JSON / JSON" style="width:100%;min-height:140px;margin-top:10px" placeholder="Paste metadata JSON here to load, or Copy JSON to fill"></textarea>
+ <div id="result" class="result" hidden></div>
+ </section>
+
+ <footer>
+ <p data-lang="en"><strong>EN</strong> This form collects chain-of-custody metadata only. Validation runs in the kernel; the front-end is an input shell and never makes admissibility decisions.</p>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</div>
+
+<script type="module">
+ import './core/i18n.js';
+ import { readZip } from './core/zip-reader.js';
+ import { buildZip } from './core/zip-builder.js';
+ import { computeRootHash } from './core/hash.js';
+ import { validateCustody, ACTION_TYPES, FIELD_TYPES, ROLE_HINTS } from './core/custody.js';
+
+ const $ = (id) => document.getElementById(id);
+ let manifest = null;
+ let evidenceBytes = null;
+
+ const TEMPLATES = {
+ 'forensic-investigator': { evidencePurpose: 'Forensic acquisition and investigation', jurisdiction: 'EU-DE', chainOfCustody: [{ actorName: '', actorRole: 'Forensic Investigator', actionType: 'Collected' }] },
+ 'compliance-auditor': { evidencePurpose: 'Periodic compliance audit', jurisdiction: 'EU-DE', chainOfCustody: [{ actorName: '', actorRole: 'Auditor', actionType: 'Reviewed' }] },
+ 'legal-counsel': { evidencePurpose: 'Legal hold / litigation support', jurisdiction: 'US-NY', chainOfCustody: [{ actorName: '', actorRole: 'Legal Representative', actionType: 'Transferred' }] },
+ 'devops-security': { evidencePurpose: 'Security incident evidence', jurisdiction: 'US-CA', chainOfCustody: [{ actorName: '', actorRole: 'System Admin', actionType: 'Collected' }] },
+ 'custom': { metaTemplate: 'custom' }
+ };
+
+ function nowUtc() {
+ const d = new Date();
+ const p = (n) => String(n).padStart(2, '0');
+ return d.getUTCFullYear() + '-' + p(d.getUTCMonth() + 1) + '-' + p(d.getUTCDate()) + ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()) + ':' + p(d.getUTCSeconds()) + ' UTC';
+ }
+
+ function setStatus(text) { $('status').textContent = text; }
+
+ $('evidence-input').addEventListener('change', async (event) => {
+ const file = event.target.files[0];
+ if (!file) return;
+ try {
+ const handle = await readZip(file);
+ let text;
+ try { text = await handle.readText('manifest.json', 8 * 1024 * 1024); }
+ catch (e) { throw new Error('cannot read manifest.json'); }
+ manifest = JSON.parse(text);
+ if (!String(manifest.spec || '').startsWith('fieldseal-evidence-')) throw new Error('not an evidence package');
+ evidenceBytes = file;
+ setStatus('loaded ' + manifest.packageId);
+ const c = manifest.custody || {};
+ $('metaTemplate').value = c.metaTemplate || '';
+ $('evidencePurpose').value = c.evidencePurpose || '';
+ $('jurisdiction').value = c.jurisdiction || '';
+ $('caseReference').value = c.caseReference || '';
+ $('evidenceIdentifier').value = c.evidenceIdentifier || '';
+ $('custodyStartUtc').value = c.custodyStartUtc || nowUtc();
+ $('custodyNote').value = c.custodyNote || '';
+ renderChain(c.chainOfCustody || []);
+ renderCustom(c.customExtraFields || []);
+ showResult('Evidence package loaded. Edit metadata and Save.', 'ok');
+ } catch (error) {
+ showResult('Load failed: ' + error.message, 'error');
+ }
+ });
+
+ $('readonly-toggle').addEventListener('change', () => {
+ const ro = $('readonly-toggle').checked;
+ $('readonly-banner').hidden = !ro;
+ document.body.classList.toggle('readonly', ro);
+ });
+
+ $('metaTemplate').addEventListener('change', () => {
+ const t = TEMPLATES[$('metaTemplate').value];
+ if (!t) return;
+ if (t.evidencePurpose && !$('evidencePurpose').value) $('evidencePurpose').value = t.evidencePurpose;
+ if (t.jurisdiction && !$('jurisdiction').value) $('jurisdiction').value = t.jurisdiction;
+ if (t.chainOfCustody && chainChildren().length === 0) renderChain(t.chainOfCustody);
+ if (t.metaTemplate) {/* custom keeps template key */}
+ });
+
+ function chainChildren() { return Array.from($('chain-list').children); }
+ function customChildren() { return Array.from($('custom-list').children); }
+
+ function renderChain(list) {
+ $('chain-list').textContent = '';
+ list.forEach((entry) => addChainRow(entry));
+ if (list.length === 0) addChainRow({});
+ }
+
+ function addChainRow(entry = {}) {
+ const row = document.createElement('div');
+ row.className = 'custody-entry';
+ row.innerHTML =
+ '<button class="btn btn-ghost btn-danger del" title="Delete">✕</button>' +
+ '<div class="grid">' +
+ '<label class="field"><span>Actor</span><input class="c-actor" maxlength="256" value="' + esc(entry.actorName || '') + '"></label>' +
+ '<label class="field"><span>Role</span><input list="role-list" class="c-role" maxlength="256" value="' + esc(entry.actorRole || '') + '"></label>' +
+ '<label class="field"><span>Organization</span><input class="c-org" maxlength="256" value="' + esc(entry.actorOrganization || '') + '"></label>' +
+ '<label class="field"><span>Contact ref</span><input class="c-contact" maxlength="128" value="' + esc(entry.actorContactRef || '') + '"></label>' +
+ '<label class="field"><span>Action</span><select class="c-action">' + ACTION_TYPES.map((a) => '<option' + (a === (entry.actionType || 'Collected') ? ' selected' : '') + '>' + a + '</option>').join('') + '</select></label>' +
+ '<label class="field"><span>Time (UTC)</span><input class="c-time" value="' + esc(entry.actionUtc || nowUtc()) + '"></label>' +
+ '<label class="field"><span>Location</span><input class="c-loc" maxlength="256" value="' + esc(entry.location || '') + '"></label>' +
+ '<label class="field"><span>Device ref</span><input class="c-device" maxlength="256" value="' + esc(entry.deviceRef || '') + '"></label>' +
+ '<label class="field"><span>Signature ref</span><input class="c-sig" maxlength="256" value="' + esc(entry.signatureReference || '') + '"></label>' +
+ '<label class="field"><span>Entry note</span><input class="c-note" maxlength="512" value="' + esc(entry.entryNote || '') + '"></label>' +
+ '</div>';
+ row.querySelector('.del').addEventListener('click', () => row.remove());
+ $('chain-list').appendChild(row);
+ }
+
+ function renderCustom(list) {
+ $('custom-list').textContent = '';
+ list.forEach((f) => addCustomRow(f));
+ if (list.length === 0) addCustomRow({});
+ }
+
+ function addCustomRow(f = {}) {
+ const row = document.createElement('div');
+ row.className = 'custom-field';
+ row.innerHTML =
+ '<button class="btn btn-ghost btn-danger del" title="Delete">✕</button>' +
+ '<div class="grid">' +
+ '<label class="field"><span>Key (no spaces)</span><input class="f-key" value="' + esc(f.fieldKey || '') + '"></label>' +
+ '<label class="field"><span>Label</span><input class="f-label" maxlength="128" value="' + esc(f.fieldLabel || '') + '"></label>' +
+ '<label class="field"><span>Value</span><input class="f-value" value="' + esc(f.fieldValue || '') + '"></label>' +
+ '<label class="field"><span>Type</span><select class="f-type">' + FIELD_TYPES.map((t) => '<option' + (t === (f.fieldType || 'text') ? ' selected' : '') + '>' + t + '</option>').join('') + '</select></label>' +
+ '</div>';
+ row.querySelector('.del').addEventListener('click', () => row.remove());
+ $('custom-list').appendChild(row);
+ }
+
+ $('add-entry').addEventListener('click', () => addChainRow({ actionType: 'Collected', actionUtc: nowUtc() }));
+ $('add-custom').addEventListener('click', () => addCustomRow({ fieldType: 'text' }));
+
+ function esc(s) { return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;'); }
+
+ function collect() {
+ const custody = {};
+ const mt = $('metaTemplate').value;
+ if (mt) custody.metaTemplate = mt;
+ const purpose = $('evidencePurpose').value.trim();
+ if (purpose) custody.evidencePurpose = purpose;
+ const jur = $('jurisdiction').value.trim();
+ if (jur) custody.jurisdiction = jur;
+ const ref = $('caseReference').value.trim();
+ if (ref) custody.caseReference = ref;
+ const eid = $('evidenceIdentifier').value.trim();
+ if (eid) custody.evidenceIdentifier = eid;
+ const start = $('custodyStartUtc').value.trim();
+ if (start) custody.custodyStartUtc = start;
+ const note = $('custodyNote').value.trim();
+ if (note) custody.custodyNote = note;
+
+ const chain = [];
+ for (const row of chainChildren()) {
+ const item = {};
+ const actor = row.querySelector('.c-actor').value.trim();
+ if (actor) item.actorName = actor; else continue;
+ const role = row.querySelector('.c-role').value.trim();
+ if (role) item.actorRole = role;
+ const org = row.querySelector('.c-org').value.trim();
+ if (org) item.actorOrganization = org;
+ const contact = row.querySelector('.c-contact').value.trim();
+ if (contact) item.actorContactRef = contact;
+ const action = row.querySelector('.c-action').value;
+ if (action) item.actionType = action;
+ const time = row.querySelector('.c-time').value.trim();
+ if (time) item.actionUtc = time;
+ const loc = row.querySelector('.c-loc').value.trim();
+ if (loc) item.location = loc;
+ const dev = row.querySelector('.c-device').value.trim();
+ if (dev) item.deviceRef = dev;
+ const sig = row.querySelector('.c-sig').value.trim();
+ if (sig) item.signatureReference = sig;
+ const enote = row.querySelector('.c-note').value.trim();
+ if (enote) item.entryNote = enote;
+ chain.push(item);
+ }
+ if (chain.length) custody.chainOfCustody = chain;
+
+ const custom = [];
+ for (const row of customChildren()) {
+ const key = row.querySelector('.f-key').value.trim();
+ if (!key) continue;
+ const f = { fieldKey: key, fieldLabel: row.querySelector('.f-label').value.trim() };
+ const val = row.querySelector('.f-value').value;
+ if (val !== '') f.fieldValue = val;
+ f.fieldType = row.querySelector('.f-type').value;
+ custom.push(f);
+ }
+ if (custom.length) custody.customExtraFields = custom;
+ return custody;
+ }
+
+ $('copy-json').addEventListener('click', async () => {
+ const json = JSON.stringify(collect(), null, 2);
+ $('json-area').value = json;
+ try { await navigator.clipboard.writeText(json); showResult('JSON copied to clipboard.', 'ok'); }
+ catch (e) { showResult('JSON placed in the text area (clipboard blocked).', 'info'); }
+ });
+
+ $('load-json').addEventListener('click', () => {
+ try {
+ const data = JSON.parse($('json-area').value);
+ if (data.metaTemplate) $('metaTemplate').value = data.metaTemplate;
+ if (data.evidencePurpose) $('evidencePurpose').value = data.evidencePurpose;
+ if (data.jurisdiction) $('jurisdiction').value = data.jurisdiction;
+ if (data.caseReference) $('caseReference').value = data.caseReference;
+ if (data.evidenceIdentifier) $('evidenceIdentifier').value = data.evidenceIdentifier;
+ if (data.custodyStartUtc) $('custodyStartUtc').value = data.custodyStartUtc;
+ if (data.custodyNote) $('custodyNote').value = data.custodyNote;
+ if (Array.isArray(data.chainOfCustody)) renderChain(data.chainOfCustody);
+ if (Array.isArray(data.customExtraFields)) renderCustom(data.customExtraFields);
+ showResult('Preset JSON loaded into form.', 'ok');
+ } catch (e) { showResult('Invalid JSON: ' + e.message, 'error'); }
+ });
+
+ $('save-btn').addEventListener('click', async () => {
+ if (!manifest) { showResult('Load an evidence package first.', 'warn'); return; }
+ const custody = collect();
+ const result = validateCustody(custody);
+ if (!result.ok) {
+ showResult('KERNEL VALIDATION:\n' + result.errors.join('\n'), 'error');
+ return;
+ }
+ try {
+ const updated = Object.assign({}, manifest, { custody });
+ if ($('recompute-hash').checked) updated.rootHash = await computeRootHash(updated);
+ await writeBack(updated);
+ showResult('Saved. rootHash = ' + updated.rootHash + (custody.customExtraFields ? ' (custom fields hash-bound)' : ''), 'ok');
+ } catch (e) { showResult('Save failed: ' + e.message, 'error'); }
+ });
+
+ async function writeBack(updatedManifest) {
+ const handle = await readZip(evidenceBytes);
+ const entries = [];
+ entries.push({ name: 'manifest.json', data: new TextEncoder().encode(JSON.stringify(updatedManifest)) });
+ for (const entry of handle.entries) {
+ if (entry.name === 'manifest.json') continue;
+ entries.push({ name: entry.name, data: await handle.readBytes(entry.name) });
+ }
+ const blob = await buildZip(entries);
+ const url = URL.createObjectURL(blob);
+ const anchor = document.createElement('a');
+ anchor.href = url;
+ anchor.download = 'evidence-custody.zip';
+ anchor.click();
+ setTimeout(() => URL.revokeObjectURL(url), 60000);
+ }
+
+ function showResult(message, kind) {
+ const node = $('result');
+ node.hidden = false;
+ node.className = 'result ' + (kind || '');
+ node.textContent = message;
+ }
+</script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT (see LICENSE); AS IS, no warranty.
+ Ownership: FieldSeal Suite.
+
+ Standalone reference / demo for the v0.5 custody & audit timeline component.
+ This component is PURE DOM (no <canvas>) and replaces the legacy canvas scatter view.
+ The real rendering lives in ../helpers/audit-timeline.js (renderAuditTimeline). This page only
+ demonstrates it with a sample case and is safe to open directly in a browser.
+-->
+<html lang="en">
+<head>
+ <meta charset="utf-8">
+ <meta name="viewport" content="width=device-width, initial-scale=1">
+ <title>Audit Timeline — FieldSeal Suite</title>
+ <link rel="stylesheet" href="../ui/style.css">
+ <style>
+ body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 24px; max-width: 760px; }
+ h1 { font-size: 18px; } .note { color: #666; font-size: 13px; }
+ </style>
+</head>
+<body>
+ <h1>Custody &amp; Audit Timeline / DOM, no canvas</h1>
+ <p class="note">Click a node to reveal the full audit event.</p>
+ <div id="demo"></div>
+ <div id="detail"></div>
+ <script type="module">
+ import { renderAuditTimeline } from '../helpers/audit-timeline.js';
+ const sample = {
+ auditLog: [
+ { eventType: 'CREATE', timestampUtc: '2026-11-13T01:00:00Z', caseStateBefore: 'draft', caseStateAfter: 'draft', operatorNote: 'Case created' },
+ { eventType: 'CAPTURE', timestampUtc: '2026-11-13T01:05:00Z', caseStateBefore: 'draft', caseStateAfter: 'draft' },
+ { eventType: 'COUNTERSIGN', timestampUtc: '2026-11-13T02:00:00Z', caseStateBefore: 'pending_countersign', caseStateAfter: 'pending_countersign' },
+ { eventType: 'SEAL', timestampUtc: '2026-11-13T03:00:00Z', caseStateBefore: 'pending_countersign', caseStateAfter: 'sealed' },
+ { eventType: 'HUMAN_NOTE', timestampUtc: '2026-11-13T03:30:00Z', payload: { noteText: 'Reviewed chain of custody; consistent.' } }
+ ],
+ custodyLog: [
+ { action: 'collect', actor: 'OP-1', ianaTz: 'Europe/Berlin', purpose: 'field intake', timestampUtc: '2026-11-13T01:10:00Z' }
+ ]
+ };
+ renderAuditTimeline(document.getElementById('demo'), sample, { detailHost: document.getElementById('detail') });
+ </script>
+</body>
+</html>

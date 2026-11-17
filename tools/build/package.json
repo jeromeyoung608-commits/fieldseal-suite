@@ -1,0 +1,17 @@
+{
+  "name": "fieldseal-build-binaries",
+  "version": "1.0.0",
+  "license": "MIT",
+  "private": true,
+  "description": "Release build tooling ONLY. Not part of the shipped zero-dependency product. Produces statically bundled offline verify binaries via @yao-pkg/pkg.",
+  "type": "module",
+  "scripts": {
+    "build": "node build-binaries.mjs",
+    "verify": "node verify-binaries.mjs"
+  },
+  "devDependencies": {
+    "pkg": "npm:@yao-pkg/pkg@5.8.1"
+  },
+  "package-lock": false,
+  "comment": "Exact pins only. See BUILD-DEPENDENCIES.md for integrity hashes and the offline-build procedure. A package-lock.json cannot be shipped: delivery gates S-06 and the read-only scanner reject any lockfile in the repository, because the product itself must stay zero-dependency."
+}

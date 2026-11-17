@@ -1,0 +1,5 @@
+COMMAND: read_lints (IDE diagnostics, workspace root)
+DATE: 2026-11-12 (mobile / touch round re-check)
+RESULT: totalCount = 0 (0 errors / 0 warnings)
+SCOPE: pwa/ui/style.css, pwa/case-export.html, cli/test/ui-availability.cjs, cli/test/test-runner.js, pwa/sw.js + workspace
+EQUIVALENT: node cli/test/read-only-scanner.cjs page-modules -> SYNTAX-AND-IMPORTS-OK

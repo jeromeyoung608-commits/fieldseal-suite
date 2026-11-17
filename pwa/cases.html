@@ -1,0 +1,160 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Case Management - FieldSeal Suite</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+</head>
+<body>
+<div class="wrap">
+ <div class="topbar">
+ <div class="brand">
+ <img src="./assets/icon.svg" alt="FieldSeal">
+ <div>
+ <h1 data-i18n="page.cases.title">Case Management</h1>
+ <p><span>Structure on-scene evidence as a case</span> · <a href="./index.html">Start</a></p>
+ </div>
+ </div>
+ <span class="net-state" id="net-state">Offline-ready</span>
+ <span id="lang-switch" class="lang-switch-host"></span>
+ </div>
+
+ <a class="back-link" href="./index.html">&larr; Suite-Start</a>
+
+ <div class="card">
+ <h2>New case</h2>
+ <p class="hint">Every capture still creates a <span class="mono">fieldseal-evidence-v0.2</span> package; the case aggregates them and forms a top-level <span class="mono">sealHash</span>. / sealHash</p>
+ <div class="row">
+ <a class="btn btn-primary" href="./newcase.html?origin=standard">New case (standard)</a>
+ <a class="btn btn-danger" href="./newcase.html?origin=emergency">Emergency quick capture</a>
+ </div>
+ <div class="notice" style="margin-top:14px">Emergency: secure media immediately, add metadata (schema) later. Case starts as <span class="mono">pending-configuration</span>and can only be sealed after completion.</div>
+ </div>
+
+ <div class="card">
+ <div class="row" style="justify-content:space-between">
+ <h2 style="margin:0">Case list</h2>
+ <button class="btn btn-ghost" id="refresh-btn" data-i18n="action.refresh">Refresh</button>
+ </div>
+ <label class="sub"><input type="checkbox" id="show-recycled">Recycle bin / SOFT-DELETED,</label>
+ <ul class="case-list" id="case-list"></ul>
+ </div>
+
+ <div class="card" id="settings-card">
+ <h2>Settings</h2>
+ <p class="hint">Extension placeholders are hidden while their featureFlag is false.</p>
+ <div id="hook-placeholders"></div>
+ </div>
+
+ <div class="card">
+ <h2>Templates</h2>
+ <p class="hint">5 NIST / OSAC-calibrated base templates (read-only) plus your own templates. / 5 NIST / OSAC ()+</p>
+ <a class="btn" href="./templates.html">Open templates</a>
+ </div>
+
+ <footer>
+ <p data-lang="en"><strong>EN</strong> This tool produces tamper-resistant records. It is NOT a qualified electronic signature under eIDAS. Identity verification of all participants is the sole responsibility of the user. Device timestamps may be altered. All data stays local (IndexedDB).</p>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</div>
+
+<script type="module">
+ import './core/i18n.js';
+ import { listCases, deleteCase, available } from './helpers/case-store.js';
+ import { el, showToast, confirmDialog, registerServiceWorker, setOfflineIndicator } from './ui/components.js';
+ import { FEATURE_FLAGS, HOOK_LABELS, isAvailable } from './helpers/ext-hooks.js';
+
+ const $ = (id) => document.getElementById(id);
+ const STATE_LABEL = {
+ draft: 'Draft',
+ 'pending-configuration': 'Pending configuration',
+ sealed: 'Sealed'
+ };
+
+ registerServiceWorker();
+ setOfflineIndicator();
+
+ function stateBadge(state) {
+ return el('span', { class: 'state-badge state-' + state, text: STATE_LABEL[state] || state });
+ }
+
+ function caseRow(c) {
+ const title = (c.caseMeta && c.caseMeta.title) || c.packageId;
+ const created = c.createdAt || '';
+ const hash = c.sealHash ? c.sealHash.slice(0, 16) + '…' : (c.rootHash ? c.rootHash.slice(0, 16) + '…' : '');
+ return el('li', { class: 'case-row' }, [
+ el('div', { class: 'case-main' }, [
+ el('div', { class: 'case-title', text: title }),
+ el('div', { class: 'case-sub', text: c.packageId.slice(0, 8) + ' \u00b7 ' + created + ' · seal: ' + hash + (c.isDeleted === true ? ' · SOFT-DELETED' : '') })
+ ]),
+ stateBadge(c.state),
+ el('div', { class: 'case-actions' }, [
+ el('a', { class: 'btn', href: './case-detail.html?id=' + encodeURIComponent(c.packageId), text: 'Open' }),
+ el('button', {
+ class: 'btn btn-ghost btn-danger', text: 'Delete',
+ onclick: async () => {
+ if (await confirmDialog('Delete this case permanently?')) {
+ await deleteCase(c.packageId);
+ showToast('Case deleted', 'ok');
+ render();
+ }
+ }
+ })
+ ])
+ ]);
+ }
+
+ async function render() {
+ const list = $('case-list');
+ list.textContent = '';
+ if (!available()) {
+ list.appendChild(el('li', { class: 'section-empty', text: 'IndexedDB in this environment not available / IndexedDB' }));
+ return 0;
+ }
+ let cases;
+ try { cases = await listCases(); }
+ catch (e) { list.appendChild(el('li', { class: 'section-empty', text: 'Error while loading' + e.message })); return 0; }
+ const recycled = $('show-recycled').checked;
+ const visible = cases.filter((c) => (c.isDeleted === true) === recycled);
+ if (!visible.length) {
+ list.appendChild(el('li', { class: 'section-empty', text: recycled
+ ? 'Recycle bin is empty.'
+ : 'No cases yet. Create a new case.' }));
+ return 0;
+ }
+ for (const c of visible) list.appendChild(caseRow(c));
+ return visible.length;
+ } // Cloud-sync switch PLACEHOLDER only. The main branch performs NO network push. flag=false => / fully hidden; flag=true with no library => friendly degradation, no exception.
+ function renderHookPlaceholders() {
+ const host = $('hook-placeholders');
+ host.textContent = '';
+ if (FEATURE_FLAGS.EXTENSION_CLOUD_SYNC !== true) return;
+ const ready = isAvailable('EXTENSION_CLOUD_SYNC');
+ const toggle = el('input', { type: 'checkbox', id: 'cloud-sync-placeholder' });
+ toggle.disabled = !ready;
+ host.appendChild(el('label', { class: 'sub' }, [toggle, ' ' + HOOK_LABELS.EXTENSION_CLOUD_SYNC]));
+ if (!ready) host.appendChild(el('div', { class: 'section-empty', text: 'Extension library not loaded; core flow continues unchanged.' }));
+ }
+
+ $('show-recycled').addEventListener('change', render);
+ $('refresh-btn').addEventListener('click', async () => { // Delivery audit D4: a refresh that renders the same data produced NO visible / feedback. Always give an explicit, count-bearing result.
+ try {
+ const count = await render();
+ showToast('Refreshed · ' + count + ' cases', 'ok');
+ } catch (e) { showToast('Refresh failed' + e.message, 'error'); }
+ }); // Audit D5: dynamically rendered content must react to a language change too.
+ document.addEventListener('fieldseal:langchange', () => { render().catch(() => {}); });
+ renderHookPlaceholders();
+ render();
+</script>
+</body>
+</html>

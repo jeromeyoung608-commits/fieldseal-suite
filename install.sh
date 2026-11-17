@@ -1,0 +1,159 @@
+#!/bin/sh
+# FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+# SPDX-License-Identifier: MIT
+# License: MIT (see LICENSE); no warranty. This installer is part of FieldSeal Suite.
+# Ownership: FieldSeal Suite project.
+#
+# Offline installer. Zero dependencies beyond a POSIX shell, cp, and Node.js 18+.
+# No network, no sudo, no system services, no writes outside --prefix.
+
+set -eu
+
+SRC=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+PREFIX="$HOME/.local/share/fieldseal-suite"
+PORT=8123
+UNINSTALL=0
+VERIFY_ONLY=0
+SKIP_SIGNATURE=0
+
+say()  { printf '%s\n' "$*"; }
+fail() { printf 'INSTALL-ERROR %s\n' "$*" >&2; exit 1; }
+
+usage() {
+  cat <<'EOF'
+FieldSeal Suite offline installer (zero dependencies)
+
+  ./install.sh [options]
+
+    --prefix DIR        install directory (default: ~/.local/share/fieldseal-suite)
+    --port N            local preview port (default: 8123, loopback only)
+    --verify-only       check the release signature and required files, write nothing
+    --uninstall         remove exactly the files this installer wrote
+    --skip-signature    explicit override; NOT recommended (documented in output)
+    --help              show this help
+
+  After install:  <prefix>/start.sh
+  Notes: browser data (cases, audit trail) lives in the browser profile, never in
+  --prefix. Uninstall does not delete browser data; export from pwa/backup.html first.
+EOF
+}
+
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --prefix) PREFIX=$2; shift 2 ;;
+    --port) PORT=$2; shift 2 ;;
+    --uninstall) UNINSTALL=1; shift ;;
+    --verify-only) VERIFY_ONLY=1; shift ;;
+    --skip-signature) SKIP_SIGNATURE=1; shift ;;
+    --help|-h) usage; exit 0 ;;
+    *) fail "unknown option: $1 (see --help)" ;;
+  esac
+done
+
+case "$PORT" in
+  ''|*[!0-9]*) fail "--port must be a number" ;;
+esac
+if [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then fail "--port out of range"; fi
+
+command -v node >/dev/null 2>&1 || fail "Node.js 18+ is required (node not found in PATH)"
+NODE_MAJOR=$(node -p 'Number(process.versions.node.split(".")[0])')
+[ "$NODE_MAJOR" -ge 18 ] || fail "Node.js 18+ is required (found $(node -v))"
+
+# Required source files. Fail closed if anything is missing or corrupt.
+REQUIRED="pwa/index.html pwa/sw.js pwa/ui/style.css cli/bin/audit.js cli/bin/serve.mjs cli/bin/backup.mjs cli/bin/doctor.mjs cli/test/test-runner.js tools/build/dist/manifest.json tools/build/dist/SHA256SUMS tools/build/dist/SHA256SUMS.sig tools/build/dist/RELEASE-PUBLIC-KEY.pem docs/RELEASE-ROLLBACK.md README.md SECURITY.md KNOWN_ISSUES.md"
+for f in $REQUIRED; do
+  [ -f "$SRC/$f" ] || fail "delivery is incomplete: missing $f"
+done
+
+say "-- release integrity --"
+if [ "$SKIP_SIGNATURE" -eq 1 ]; then
+  say "SIGNATURE-CHECK-SKIPPED (explicit operator override; not recommended)"
+else
+  ( cd "$SRC" && node tools/release/release-tool.mjs verify-signature ) || fail "release signature verification failed"
+  ( cd "$SRC" && node tools/build/verify-binaries.mjs >/dev/null ) || fail "binary verification failed"
+  say "SIGNATURE-OK BINARIES-OK"
+fi
+
+if [ "$VERIFY_ONLY" -eq 1 ]; then
+  say "INSTALL-VERIFY-OK (no files written)"
+  exit 0
+fi
+
+if [ "$UNINSTALL" -eq 1 ]; then
+  MANIFEST="$PREFIX/.fieldseal-install-manifest"
+  [ -f "$MANIFEST" ] || fail "no installation manifest at $PREFIX (nothing to uninstall)"
+  say "-- uninstalling from $PREFIX --"
+  while IFS= read -r rel; do
+    [ -n "$rel" ] || continue
+    case "$rel" in
+      *..*|/*) fail "refusing unsafe manifest entry: $rel" ;;
+    esac
+    rm -f -- "$PREFIX/$rel"
+  done < "$MANIFEST"
+  rm -f -- "$MANIFEST"
+  # Remove empty directories only; never touch unknown files.
+  find "$PREFIX" -depth -type d -empty -exec rmdir {} \; 2>/dev/null || true
+  say "INSTALL-UNINSTALL-OK"
+  say "Browser data was NOT deleted. To finish: export from pwa/backup.html, then clear site data"
+  say "and unregister the service worker for the origin you used."
+  exit 0
+fi
+
+say "-- installing to $PREFIX --"
+mkdir -p "$PREFIX"
+MANIFEST="$PREFIX/.fieldseal-install-manifest"
+TMP_MANIFEST="$MANIFEST.tmp"
+: > "$TMP_MANIFEST"
+
+# Copy a whole subtree and record every file written (idempotent: cp -f overwrites).
+copy_tree() {
+  src_tree=$1
+  dst_tree=$2
+  [ -d "$SRC/$src_tree" ] || fail "missing source tree: $src_tree"
+  mkdir -p "$PREFIX/$dst_tree"
+  ( cd "$SRC" && find "$src_tree" -type f -not -path '*/.tmp/*' -not -name '*.log' ) | while IFS= read -r rel; do
+    mkdir -p "$PREFIX/$(dirname -- "$rel")"
+    cp -f -- "$SRC/$rel" "$PREFIX/$rel"
+    printf '%s\n' "$rel" >> "$TMP_MANIFEST"
+  done
+}
+
+copy_tree pwa pwa
+copy_tree cli cli
+copy_tree docs docs
+copy_tree tools tools
+
+for f in README.md SECURITY.md KNOWN_ISSUES.md CHANGELOG.md; do
+  [ -f "$SRC/$f" ] || continue
+  cp -f -- "$SRC/$f" "$PREFIX/$f"
+  printf '%s\n' "$f" >> "$TMP_MANIFEST"
+done
+
+cat > "$PREFIX/start.sh" <<EOF
+#!/bin/sh
+# Generated by install.sh. Loopback only; no network access required.
+exec node "\$(CDPATH= cd -- "\$(dirname -- "\$0")" && pwd)/cli/bin/serve.mjs" --root "\$(CDPATH= cd -- "\$(dirname -- "\$0")" && pwd)" --host 127.0.0.1 --port $PORT
+EOF
+chmod +x "$PREFIX/start.sh"
+printf '%s\n' 'start.sh' >> "$TMP_MANIFEST"
+
+cat > "$PREFIX/verify.sh" <<'EOF'
+#!/bin/sh
+# Generated by install.sh. Offline integrity + health check.
+ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+cd "$ROOT" || exit 1
+node tools/release/release-tool.mjs verify-signature || exit 1
+node tools/build/verify-binaries.mjs || exit 1
+node cli/bin/doctor.mjs --json
+EOF
+chmod +x "$PREFIX/verify.sh"
+printf '%s\n' 'verify.sh' >> "$TMP_MANIFEST"
+
+mv -f "$TMP_MANIFEST" "$MANIFEST"
+printf '%s\n' '.fieldseal-install-manifest' >> "$MANIFEST"
+
+say "INSTALL-OK $PREFIX"
+say "Start:  $PREFIX/start.sh"
+say "URL:    http://127.0.0.1:$PORT/pwa/index.html"
+say "Verify: $PREFIX/verify.sh"
+say "Remove: $SRC/install.sh --prefix $PREFIX --uninstall"

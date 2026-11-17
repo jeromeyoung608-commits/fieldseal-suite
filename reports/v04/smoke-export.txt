@@ -1,0 +1,12 @@
+### Result
+{"coreResult":"coreResult: ok","hooksHidden":false,"file":"case-3eb026e4-draft.zip"}
+### Ran Playwright code
+```js
+await (async () => { await page.getByRole('link', { name: /Export & Pruefpanel/ }).click(); await page.waitForURL(/case-export/); const body = await page.locator('body').innerText(); const [d] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Fall-ZIP exportieren/ }).click()]); await d.saveAs('/Users/yangjie/CodeBuddy/20261111145003/fieldseal-suite/reports/v04/v04-case-export.zip'); return { coreResult: (body.match(/coreResult: [a-z_]+/) || [])[0], hooksHidden: body.includes('All featureFlags are false'), file: d.suggestedFilename() }; })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8123/pwa/case-export.html?id=3eb026e4-4aab-4f5f-bffa-1bf24a3fe646
+- Page Title: Export & Verification - FieldSeal Suite
+### Events
+- Downloading file case-3eb026e4-draft.zip ...
+- Downloaded file case-3eb026e4-draft.zip to ".playwright-cli/case-3eb026e4-draft.zip"

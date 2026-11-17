@@ -1,0 +1,1 @@
+TRUSTED CORE — 100% hand-written source. Node.js built-ins only (fs, stream, crypto, zlib, path). No package.json, no npm install, no third-party dependencies, no external code.

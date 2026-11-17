@@ -1,0 +1,103 @@
+### Result
+{"ok":true,"viewport":"390x844","rows":[{"page":"index.html","vw":390,"mq":true,"wrapPad":"14px","btnMin":"844px","btnFont":"15px","scrollWidth":390,"overflow":0,"docHeight":1278,"screens":1.5,"cards":1,"wideCount":0,"wide":[],"controlCount":3,"smallCount":0,"small":[],"tinyCount":0,"tiny":[],"tables":0,"bodyChars":1602},{"page":"cases.html","vw":390,"mq":true,"wrapPad":"14px","btnMin":"46px","btnFont":"15px","scrollWidth":390,"overflow":0,"docHeight":1667,"screens":2,"cards":4,"wideCount":0,"wide":[],"controlCount":6,"smallCount":0,"small":[],"tinyCount":0,"tiny":[],"tables":0,"bodyChars":1809},{"page":"newcase.html","vw":390,"mq":true,"wrapPad":"14px","btnMin":"46px","btnFont":"15px","scrollWidth":390,"overflow":0,"docHeight":1247,"screens":1.5,"cards":2,"wideCount":0,"wide":[],"controlCount":7,"smallCount":0,"small":[],"tinyCount":0,"tiny":[],"tables":0,"bodyChars":1150},{"page":"capture.html","vw":390,"mq":true,"wrapPad":"14px","btnMin":"46px","btnFont":"15px","scrollWidth":390,"overflow":0,"docHeight":2260,"screens":2.7,"cards":4,"wideCount":0,"wide":[],"controlCount":16,"smallCount":0,"small":[],"tinyCount":0,"tiny":[],"tables":0,"bodyChars":1905},{"page":"sign.html","vw":390,"mq":true,"wrapPad":"14px","btnMin":"46px","btnFont":"15px","scrollWidth":390,"overflow":0,"docHeight":3996,"screens":4.7,"cards":8,"wideCount":0,"wide":[],"controlCount":38,"smallCount":0,"small":[],"tinyCount":0,"tiny":[],"tables":0,"bodyChars":2883},{"page":"custody.html","vw":390,"mq":true,"wrapPad":"14px","btnMin":"46px","btnFont":"15px","scrollWidth":390,"overflow":0,"docHeight":2063,"screens":2.4,"cards":3,"wideCount":0,"wide":[],"controlCount":14,"smallCount":0,"small":[],"tinyCount":0,"tiny":[],"tables":0,"bodyChars":1254},{"page":"templates.html","vw":390,"mq":true,"wrapPad":"14px","btnMin":"46px","btnFont":"15px","scrollWidth":390,"overflow":0,"docHeight":4725,"screens":5.6,"cards":7,"wideCount":0,"wide":[],"controlCount":6,"smallCount":0,"small":[],"tinyCount":0,"tiny":[],"tables":0,"bodyChars":3974},{"page":"case-detail.html","vw":390,"mq":true,"wrapPad":"14px","btnMin":"46px","btnFont":"15px","scrollWidth":390,"overflow":0,"docHeight":4978,"screens":5.9,"cards":10,"wideCount":0,"wide":[],"controlCount":35,"smallCount":0,"small":[],"tinyCount":0,"tiny":[],"tables":0,"bodyChars":3777},{"page":"case-capture.html","vw":390,"mq":true,"wrapPad":"14px","btnMin":"46px","btnFont":"15px","scrollWidth":390,"overflow":0,"docHeight":2694,"screens":3.2,"cards":7,"wideCount":0,"wide":[],"controlCount":25,"smallCount":0,"small":[],"tinyCount":0,"tiny":[],"tables":0,"bodyChars":1677},{"page":"case-custody.html","vw":390,"mq":true,"wrapPad":"14px","btnMin":"46px","btnFont":"15px","scrollWidth":390,"overflow":0,"docHeight":1654,"screens":2,"cards":4,"wideCount":0,"wide":[],"controlCount":8,"smallCount":0,"small":[],"tinyCount":0,"tiny":[],"tables":0,"bodyChars":1367},{"page":"case-export.html","vw":390,"mq":true,"wrapPad":"14px","btnMin":"46px","btnFont":"15px","scrollWidth":390,"overflow":0,"docHeight":2534,"screens":3,"cards":5,"wideCount":0,"wide":[],"controlCount":8,"smallCount":0,"small":[],"tinyCount":0,"tiny":[],"tables":12,"bodyChars":2677}]}
+### Ran Playwright code
+```js
+await (async () => {
+  const BASE = "http://127.0.0.1:8123/pwa/";
+  await page.setViewportSize({ width: 390, height: 844 });
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Network.enable');
+  await cdp.send('Network.clearBrowserCache');
+  await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
+  await page.goto(BASE + 'cases.html', { waitUntil: 'domcontentloaded' });
+  await page.evaluate(async () => {
+    if (navigator.serviceWorker) for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+    if (window.caches) for (const k of await caches.keys()) await caches.delete(k);
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  const id = await page.evaluate(async () => {
+    const K = await import('./core/case-manifest.js');
+    const S = await import('./helpers/case-store.js');
+    for (const c of await S.listCases()) if (String((c.caseMeta || {}).title || '').startsWith('UI-CHECK mobile')) await S.deleteCase(c.packageId);
+    const d = await K.createCase({ metaTemplate: 'blank', caseMeta: { title: 'UI-CHECK mobile' } });
+    await S.putCase(d);
+    return d.packageId;
+  });
+  const pages = [
+    ['index.html',''], ['cases.html',''], ['newcase.html','?origin=standard'], ['capture.html',''],
+    ['sign.html',''], ['custody.html',''], ['templates.html',''],
+    ['case-detail.html','?id=' + id], ['case-capture.html','?id=' + id],
+    ['case-custody.html','?id=' + id], ['case-export.html','?id=' + id]
+  ];
+  const rows = [];
+  for (const [n, q] of pages) {
+    await page.goto(BASE + n + q, { waitUntil: 'domcontentloaded' });
+    await page.waitForSelector('.state-banner', { timeout: 5000 }).catch(() => {});
+    await page.waitForTimeout(180);
+    if (['capture.html', 'case-detail.html', 'case-export.html'].indexOf(n) !== -1) {
+      await page.screenshot({ path: '/tmp/fieldseal-mobile-' + n.replace('.html', '') + '.png' });
+    }
+    const m = await page.evaluate(() => {
+      const de = document.documentElement;
+      const vw = de.clientWidth;
+      const overflow = de.scrollWidth - vw;
+      const label = (el) => {
+        let s = el.tagName.toLowerCase();
+        if (el.id) s += '#' + el.id;
+        const c = typeof el.className === 'string' ? el.className.trim().split(/\s+/).filter(Boolean).slice(0, 2).join('.') : '';
+        if (c) s += '.' + c;
+        return s.slice(0, 60);
+      };
+      const visible = (el) => {
+        const cs = getComputedStyle(el);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || cs.position === 'fixed') return false;
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0;
+      };
+      const all = Array.from(document.querySelectorAll('body *'));
+      const wide = [], small = [], tiny = [];
+      for (const el of all) {
+        if (!visible(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (r.right > vw + 1 || r.left < -1) wide.push({ el: label(el), left: Math.round(r.left), right: Math.round(r.right), w: Math.round(r.width) });
+      }
+      const ctlSel = 'button, a.btn, a.nav-card, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea, summary';
+      const ctlList = Array.from(document.querySelectorAll(ctlSel));
+      for (const el of ctlList) {
+        if (!visible(el)) continue;
+        const r = el.getBoundingClientRect();
+        if (Math.round(r.height) < 44) small.push({ el: label(el), h: Math.round(r.height), w: Math.round(r.width), fs: getComputedStyle(el).fontSize });
+      }
+      for (const el of all) {
+        if (!visible(el) || el.children.length) continue;
+        const t = (el.textContent || '').trim();
+        if (!t) continue;
+        const fs = parseFloat(getComputedStyle(el).fontSize);
+        if (fs < 12) tiny.push({ el: label(el), fs: fs, text: t.slice(0, 24) });
+      }
+      const probe = document.querySelector('.btn') || document.body;
+      return { vw, mq: matchMedia('(max-width: 620px)').matches,
+        wrapPad: getComputedStyle(document.querySelector('.wrap')).paddingTop,
+        btnMin: getComputedStyle(probe).minHeight, btnFont: getComputedStyle(probe).fontSize,
+        scrollWidth: de.scrollWidth, overflow, docHeight: de.scrollHeight,
+        screens: Math.round(de.scrollHeight / 844 * 10) / 10, cards: document.querySelectorAll('.card').length,
+        wideCount: wide.length, wide: wide.slice(0, 10),
+        controlCount: ctlList.length, smallCount: small.length, small: small.slice(0, 10),
+        tinyCount: tiny.length, tiny: tiny.slice(0, 8), tables: document.querySelectorAll('table').length,
+        bodyChars: document.body.innerText.length };
+    });
+    rows.push({ page: n, ...m });
+  }
+  await page.evaluate(async (pid) => {
+    const S = await import('./helpers/case-store.js');
+    await S.deleteCase(pid);
+    return true;
+  }, id);
+  return { ok: true, viewport: '390x844', rows };
+})(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8123/pwa/case-export.html?id=b6d25d89-cd84-4558-bc66-cde24a6c5f7c
+- Page Title: Export & Verification - FieldSeal Suite
+### Events
+- New console entries: .playwright-cli/console-2026-11-12T09-45-58-759Z.log#L10-L11

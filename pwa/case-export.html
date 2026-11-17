@@ -1,0 +1,399 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Export & Verification - FieldSeal Suite</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+<style>
+ .print-only { display: none; }
+ // * This is native browser print flow. Precision layout, custom font, advanced PDF features are out of core scope, use extension hook for pdf-lib/jspdf later. *
+ @media print {
+ .no-print, .topbar, footer, .back-link { display: none !important; }
+ .wrap { max-width: none; padding: 0; }
+ .print-only { display: block !important; }
+ body { background: #fff; color: #111; }
+ }
+</style>
+</head>
+<body>
+<div class="wrap no-print">
+ <div class="topbar">
+ <div class="brand">
+ <img src="./assets/icon.svg" alt="FieldSeal">
+ <div>
+ <h1 data-i18n="page.export.title">Export &amp; Verification</h1>
+ <p>Export &amp; verification panel</p>
+ </div>
+ </div>
+ <span class="net-state" id="net-state">Offline-ready</span>
+ <span id="lang-switch" class="lang-switch-host"></span>
+ </div>
+
+ <a class="back-link" id="back-link" href="./cases.html">&larr; To case</a>
+
+ <div class="card">
+ <h2 id="case-head">Case</h2>
+ <div id="case-info"></div>
+ </div>
+
+ <div id="panel"></div>
+
+ <footer>
+ <p data-lang="en"><strong>EN</strong> All exports are generated locally. No upload. NOT a qualified eIDAS signature; device time and GPS may be altered.</p>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</div>
+
+<div id="print-report" class="print-only"></div>
+
+<script type="module">
+ import './core/i18n.js';
+ import { getCase, listEvidencePackages, getCaseCipher, listSignatureImages, available, putCase } from './helpers/case-store.js';
+ import { verifyCase, setJurisdiction } from './core/case-manifest.js';
+ import { readZip } from './core/zip-reader.js';
+ import { computeRootHash, verifyFileHash } from './core/hash.js';
+ import {
+ preflightCaseExport, buildCaseReportHtml, buildCaseLedgerCsv, buildCaseLedgerExtendedCsv,
+ buildVerifyManifest, buildCaseExportZip, buildCaseChecksumText, caseExportFileName
+ } from './helpers/case-export.js';
+ import { CHECKSUM_FILE } from './helpers/case-checksums.js';
+ import { CIPHER_FILE } from './helpers/case-crypto.js';
+ import { HOOK_IDS, FEATURE_FLAGS, callHook, isAvailable, HOOK_LABELS } from './helpers/ext-hooks.js';
+ import { el, showToast, downloadBlob, registerServiceWorker, setOfflineIndicator } from './ui/components.js'; // Extension products are export attachments ONLY. flag=false => nothing is collected, no / branch executes, no UI is rendered. Products never enter sealHash; case-files.sha256 / covers them because they are ordinary export entries.
+ function collectHookAttachments(c) {
+ const out = [];
+ for (const id of HOOK_IDS) {
+ if (FEATURE_FLAGS[id] !== true) continue;
+ const r = callHook(id, 'run', { caseId: c.packageId, state: c.state, specVersion: c.specVersion });
+ if (!r.ok || r.data === null || r.data === undefined) continue;
+ const bytes = typeof r.data === 'string' ? new TextEncoder().encode(r.data)
+ : (r.data instanceof ArrayBuffer ? new Uint8Array(r.data) : null);
+ if (!bytes) continue;
+ out.push({ name: id.toLowerCase() + '.txt', blob: new Blob([bytes], { type: 'application/octet-stream' }) });
+ }
+ return out;
+ }
+ function exportExtra(c) {
+ return { cipherBlob: state.cipherBlob, signatureBlobs: state.signatureBlobs, attachments: collectHookAttachments(c) };
+ }
+ function hookPlaceholder(id) {
+ if (FEATURE_FLAGS[id] !== true) return null;
+ const enabled = isAvailable(id);
+ return el('button', {
+ class: 'btn', text: HOOK_LABELS[id] + ' (placeholder)',
+ onclick: () => showToast(enabled ? 'Extension placeholder: no third-party logic in the main branch' : 'Extension library not loaded; core export continues unchanged', enabled ? 'info' : 'warn')
+ });
+ }
+
+ const $ = (id) => document.getElementById(id);
+ const STATE_LABEL = {
+ draft: 'Draft',
+ 'pending-configuration': 'Pending configuration',
+ pending_countersign: 'Awaiting countersign',
+ sealed: 'Sealed'
+ };
+
+ registerServiceWorker();
+ setOfflineIndicator();
+
+ const caseId = new URLSearchParams(location.search).get('id');
+ $('back-link').href = './case-detail.html?id=' + encodeURIComponent(caseId || '');
+ const state = { caseObj: null, packages: [], preflight: null, cipherBlob: null, signatureBlobs: [] };
+
+ function section(title, body) { return el('div', { class: 'card' }, [el('h2', { text: title }), body]); } // In-browser per-child verification: read the frozen v0.2 manifest and recompute its rootHash, AND / re-hash the ACTUAL evidence bytes (not just the manifest) so swapped/truncated media is detected / delivery-audit B-05 — the CLI already does this via verifyPackage; the browser must too.
+ async function verifyChild(child) {
+ const rec = state.packages.find((p) => p.packageId === child.packageId);
+ if (!rec || !rec.blob) return { packageId: child.packageId, rootHash: '', coreResult: 'missing_evidence' };
+ try {
+ const handle = await readZip(rec.blob);
+ const text = await handle.readText('manifest.json', 8 * 1024 * 1024);
+ const manifest = JSON.parse(text);
+ const computed = await computeRootHash(manifest);
+ let coreResult = computed === child.rootHash ? 'ok' : 'tampered';
+ for (const f of manifest.files || []) {
+ try {
+ const bytes = await handle.readBytes(f.name);
+ if (!(await verifyFileHash(bytes, f.hash))) { coreResult = 'tampered'; break; }
+ } catch (err) {
+ coreResult = 'tampered'; break;
+ }
+ }
+ return { packageId: child.packageId, rootHash: computed, coreResult };
+ } catch (e) {
+ return { packageId: child.packageId, rootHash: '', coreResult: 'tampered', error: e.message };
+ }
+ }
+
+ async function runVerification(c, node) {
+ node.textContent = '';
+ node.appendChild(el('div', { class: 'section-empty', text: 'Checking...' }));
+ const r = await verifyCase(c, { verifyChild });
+ node.textContent = '';
+ node.appendChild(el('div', { class: 'row', style: 'justify-content:space-between' }, [
+ el('span', { class: 'verify-result ' + r.coreResult, text: 'coreResult: ' + r.coreResult }),
+ el('span', { class: 'mono', text: r.children.length + ' children' })
+ ]));
+ node.appendChild(el('div', { class: 'mono', text: 'rootHash ' + r.rootHash }));
+ node.appendChild(el('div', { class: 'mono', text: 'sealHash ' + r.sealHash }));
+ if (r.errors && r.errors.length) {
+ node.appendChild(el('div', { class: 'notice', text: 'errors: ' + r.errors.join('; ') }));
+ }
+ if (r.children.length) {
+ const list = el('ul', { class: 'log-list' });
+ for (const ch of r.children) {
+ list.appendChild(el('li', { class: 'log-item' }, [
+ el('strong', { text: ch.packageId.slice(0, 8) + ' [' + ch.coreResult + ']' }),
+ el('div', { class: 'lm', text: ch.rootHash || '' }),
+ ch.error ? el('div', { class: 'lm', text: ch.error }) : null
+ ]));
+ }
+ node.appendChild(list);
+ }
+ return r;
+ }
+
+ function exportButtons(c) {
+ const enc = new TextEncoder();
+ const box = el('div', {});
+ const pre = state.preflight;
+ if (!pre.ok) {
+ box.appendChild(el('div', { class: 'notice', text: 'Export locked' + pre.errors.join('; ') }));
+ }
+ for (const w of pre.warnings) box.appendChild(el('div', { class: 'phase-note', text: w })); // v0.5 GDPR PII redaction toggle — masks operator/contact/device PII in exported artifacts only; // the source manifest and its rootHash/sealHash are never altered.
+ box.appendChild(el('label', { class: 'field', style: 'display:flex;gap:6px;align-items:center;margin:8px 0' }, [
+ el('input', { type: 'checkbox', onchange: (e) => { state.redactPii = e.target.checked; } }),
+ el('span', { text: 'GDPR: PII redact / UA )' })
+ ]));
+ box.appendChild(el('div', { class: 'row' }, [
+ el('button', {
+ class: 'btn', text: 'HTML report',
+ onclick: () => {
+ downloadBlob(new Blob([enc.encode(buildCaseReportHtml(c, { redact: state.redactPii }))], { type: 'text/html' }), 'case-report-' + c.packageId.slice(0, 8) + '.html');
+ showToast('HTML report generated', 'ok');
+ }
+ }),
+ el('button', {
+ class: 'btn', text: 'CSV ledger',
+ onclick: () => {
+ downloadBlob(new Blob([enc.encode(buildCaseLedgerCsv(c, { redact: state.redactPii }))], { type: 'text/csv' }), 'case-ledger-' + c.packageId.slice(0, 8) + '.csv');
+ showToast('CSV generated', 'ok');
+ }
+ }),
+ el('button', {
+ class: 'btn', text: 'CSV extended',
+ onclick: () => {
+ downloadBlob(new Blob([enc.encode(buildCaseLedgerExtendedCsv(c, { redact: state.redactPii }))], { type: 'text/csv' }), 'case-ledger-extended-' + c.packageId.slice(0, 8) + '.csv');
+ showToast('Extended CSV generated', 'ok');
+ }
+ }),
+ el('button', {
+ class: 'btn', text: 'VERIFY.txt',
+ onclick: () => {
+ downloadBlob(new Blob([enc.encode(buildVerifyManifest(c))], { type: 'text/plain' }), 'VERIFY-' + c.packageId.slice(0, 8) + '.txt');
+ showToast('VERIFY.txt generated', 'ok');
+ }
+ }),
+ el('button', {
+ class: 'btn', text: CHECKSUM_FILE + '', disabled: !pre.ok,
+ onclick: async () => {
+ try {
+ const text = await buildCaseChecksumText(c, state.packages, exportExtra(c));
+ downloadBlob(new Blob([enc.encode(text)], { type: 'text/plain' }), CHECKSUM_FILE);
+ showToast('Checksum list generated', 'ok');
+ } catch (e) { showToast('Checksum failed' + e.message, 'error'); }
+ }
+ }),
+ el('button', {
+ class: 'btn', text: 'Print / Save as PDF',
+ onclick: () => {
+ showToast('Natives Browser-Druckfenster', 'info');
+ window.print();
+ }
+ }),
+ hookPlaceholder('EXTENSION_ENCRYPTED_ZIP'),
+ hookPlaceholder('EXTENSION_PDF_LIB'),
+ el('button', {
+ class: 'btn btn-primary', text: 'Export case ZIP', disabled: !pre.ok,
+ onclick: async () => {
+ try {
+ const blob = await buildCaseExportZip(c, state.packages, Object.assign(exportExtra(c), { redact: state.redactPii }));
+ downloadBlob(blob, caseExportFileName(c));
+ showToast('Case ZIP exported', 'ok');
+ } catch (e) { showToast('Export failed' + e.message, 'error'); }
+ }
+ })
+ ]));
+ box.appendChild(el('div', { class: 'notice', text: 'v0.4 /attachments contract: extension-hook products are excluded from sealHash and MUST be covered by case-files.sha256. Snapshots are for ARCHIVE ONLY and never replace main-case case verify. The extended CSV (case-ledger-extended.csv) carries operatorProfile, exhibitId, jurisdiction and best-effort Aegis status; it is a separate file and never alters the frozen v0.2 ledger header.' }));
+ if (c.caseEncryptionMeta) {
+ box.appendChild(el('div', { class: 'phase-note', text: 'Encrypted copy' + (state.cipherBlob
+ ? CIPHER_FILE + ' is added to the ZIP'
+ : 'not present locally; only metadata is in the manifest') }));
+ }
+ return box;
+ }
+
+ function cliPanel(c) {
+ const cmd = 'node cli/bin/audit.js case verify ' + caseExportFileName(c) + ' --json';
+ const box = el('div', {});
+ box.appendChild(el('p', { class: 'hint', text: 'After download, verify the unchanged package with the zero-dependency CLI (coreResult: ok).' }));
+ box.appendChild(el('pre', { id: 'cli-cmd', text: cmd }));
+ box.appendChild(el('button', {
+ class: 'btn btn-ghost', text: 'Copy command',
+ onclick: async () => {
+ try {
+ await navigator.clipboard.writeText(cmd);
+ showToast('Copied', 'ok');
+ } catch (e) {
+ const range = document.createRange();
+ range.selectNodeContents($('cli-cmd'));
+ window.getSelection().removeAllRanges();
+ window.getSelection().addRange(range);
+ showToast('Please copy manually', 'warn');
+ }
+ }
+ }));
+ box.appendChild(el('pre', { text: 'sha256sum -c ' + CHECKSUM_FILE }));
+ box.appendChild(el('div', { class: 'phase-note', text: 'The ZIP contains case-manifest.json + evidence<packageId>.zip + case-report.html + case-ledger.csv + VERIFY.txt + case-files.sha256 (optional ' + CIPHER_FILE + '). The case carries rootHash and sealHash in the manifest; VERIFY.txt lists both, all child hashes and the v0.3 status.' }));
+ return box;
+ } // The attestation document ships full-page CSS (body/h1/table/footer/10px attribution). / Injected verbatim it restyles the whole app; scope every selector to the print surface.
+ function scopeReportCss(css) {
+ const clean = css.replace(/\/\*[\s\S]*?\*\//g, '');
+ const root = '#print-report';
+ const out = [];
+ let i = 0;
+ while (i < clean.length) {
+ const open = clean.indexOf('{', i);
+ if (open < 0) break;
+ const head = clean.slice(i, open).trim();
+ let depth = 1;
+ let j = open + 1;
+ while (j < clean.length && depth > 0) {
+ if (clean[j] === '{') depth++;
+ else if (clean[j] === '}') depth--;
+ j++;
+ }
+ const block = clean.slice(open + 1, j - 1);
+ if (head.indexOf('@media') === 0) out.push(head + ' {' + scopeReportCss(block) + '}');
+ else if (head.indexOf('@') === 0) out.push(head + ' {' + block + '}');
+ else if (head) {
+ const selectors = head.split(',').map((s) => {
+ const t = s.trim();
+ if (!t) return '';
+ if (t === 'body' || t === 'html' || t === ':root' || t === 'html body') return root;
+ if (t.indexOf(':root ') === 0) return root + ' ' + t.slice(6).trim();
+ return root + ' ' + t;
+ }).filter(Boolean).join(', ');
+ out.push(selectors + ' {' + block + '}');
+ }
+ i = j;
+ }
+ return out.join('\n');
+ }
+
+ function render(c) {
+ const host = $('panel');
+ host.textContent = ''; // Print-only surface: the complete English Attestation (custody, countersigns, hashes).
+ const reportDoc = new DOMParser().parseFromString(buildCaseReportHtml(c, { redact: state.redactPii }), 'text/html');
+ const printHost = $('print-report');
+ printHost.textContent = '';
+ const reportStyle = reportDoc.querySelector('style');
+ if (reportStyle) printHost.appendChild(el('style', { text: scopeReportCss(reportStyle.textContent) }));
+ const reportPage = reportDoc.querySelector('.page');
+ if (reportPage) { // Signature PNGs are ZIP attachments, not inline data URLs. Resolve them to local blob / URLs for the print view and remove unresolved src attributes (no broken requests).
+ for (const img of reportPage.querySelectorAll('img.sig')) {
+ const file = img.getAttribute('src') || '';
+ const id = file.replace(/^signatures\//, '').replace(/\.png$/i, '');
+ const hit = state.signatureBlobs.find((s) => s.countersignId === id);
+ if (hit && hit.blob) img.src = URL.createObjectURL(hit.blob);
+ else { img.removeAttribute('src'); img.alt = 'Signature attachment is available in the exported ZIP'; }
+ }
+ printHost.appendChild(reportPage);
+ }
+ $('case-head').textContent = 'Case' + (c.caseMeta.title || c.packageId.slice(0, 8));
+ $('case-info').appendChild(el('div', { class: 'row' }, [
+ el('span', { class: 'state-badge state-' + c.state, text: STATE_LABEL[c.state] || c.state }),
+ el('span', { class: 'mono', text: 'Captures: ' + c.children.length })
+ ])); // 1) verification panel
+ const verifyBody = el('div', {});
+ const verifyResult = el('div', { id: 'verify-result', style: 'margin:10px 0' });
+ verifyBody.appendChild(el('div', { class: 'row' }, [
+ el('button', { class: 'btn btn-primary', text: 'Verify locally', onclick: () => runVerification(c, verifyResult) }),
+ el('span', { class: 'mono', text: 'case-manifest + ' + c.children.length + ' children' })
+ ]));
+ verifyBody.appendChild(verifyResult);
+ host.appendChild(section('Integrity verification panel', verifyBody)); // 1b) Jurisdiction disclaimer selection (display-only; stored in caseMeta.jurisdiction, rehashed)
+ const jSel = el('select', { id: 'jurisdiction-sel' });
+ for (const v of ['', 'US-FRE', 'Germany-ZPO', 'UK-Civil', 'General Audit']) {
+ const o = el('option', { value: v, text: v || 'None' });
+ if ((c.caseMeta && c.caseMeta.jurisdiction) === v) o.selected = true;
+ jSel.appendChild(o);
+ }
+ const jCard = el('div', {}, [
+ el('p', { class: 'hint', text: 'Select a jurisdiction disclaimer for the report. It is stored in caseMeta.jurisdiction and affects only the displayed disclaimer text, never the hash logic.' }),
+ el('label', { class: 'field' }, [el('span', { text: 'Jurisdiction' }), jSel])
+ ]);
+ if (c.state === 'sealed') {
+ jSel.setAttribute('disabled', '');
+ jCard.appendChild(el('div', { class: 'phase-note', text: 'Cannot change jurisdiction after sealing.' }));
+ } else {
+ jSel.onchange = async () => {
+ try {
+ const next = await setJurisdiction(c, jSel.value);
+ await putCase(next);
+ c.caseMeta = next.caseMeta; c.rootHash = next.rootHash; c.sealHash = next.sealHash;
+ showToast('Jurisdiction saved', 'ok');
+ render(c);
+ } catch (e) { showToast('Jurisdiction failed' + e.message, 'error'); }
+ };
+ }
+ host.appendChild(section('Jurisdiction Notice', jCard)); // 2) preflight + export
+ host.appendChild(section('Export suite', exportButtons(c))); // 3) CLI verification
+ host.appendChild(section('CLI verification', cliPanel(c))); // 4) risk notes
+ host.appendChild(section('Risk notes', el('div', {}, [
+ el('div', { class: 'notice', text: 'Draft exports are marked DRAFT ONLY and have no evidentiary weight. Only after sealing is the sealHash authoritative. After sealing, any change results in tampered.' }),
+ el('div', { class: 'notice', text: 'Draft exports are marked DRAFT ONLY and carry no evidentiary weight. sealHash becomes authoritative only after sealing; any later change fails verification as tampered.' }),
+ el('div', { class: 'notice', text: 'DRAFT ONLY; sealHash becomes authoritative only after sealing; any later change fails verification as tampered.' }),
+ el('div', { class: 'notice', text: 'Print / Save as PDF uses only the native browser print flow. Precision layout, custom fonts and advanced PDF features are outside the core scope.' })
+ ])));
+
+ runVerification(c, verifyResult);
+ }
+
+ async function main() {
+ if (!caseId || !available()) {
+ $('case-info').textContent = 'Case ID missing or IndexedDB unavailable. / ID IndexedDB';
+ return;
+ }
+ let c;
+ try { c = await getCase(caseId); } catch (e) {
+ $('case-info').textContent = 'Load failed: ' + e.message; return;
+ }
+ if (!c) { $('case-info').textContent = 'Case not found'; return; }
+ state.caseObj = c;
+ try { state.packages = await listEvidencePackages(caseId); }
+ catch (e) { showToast('Packages could not be loaded: ' + e.message, 'error'); state.packages = []; }
+ try {
+ const cipherRec = await getCaseCipher(caseId);
+ state.cipherBlob = cipherRec && cipherRec.blob ? cipherRec.blob : null;
+ } catch (e) { state.cipherBlob = null; }
+ try {
+ state.signatureBlobs = (await listSignatureImages(caseId))
+ .filter((r) => r && r.blob && /^[A-Za-z0-9_-]+$/.test(r.packageId))
+ .map((r) => ({ countersignId: r.packageId, blob: r.blob }));
+ } catch (e) { state.signatureBlobs = []; }
+ state.preflight = preflightCaseExport(c, state.packages);
+ render(c);
+ }
+ main();
+</script>
+</body>
+</html>

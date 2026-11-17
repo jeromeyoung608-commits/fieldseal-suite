@@ -1,0 +1,42 @@
+FieldSeal Suite
+Copyright (c) 2026 FieldSeal Suite contributors
+License: MIT (see LICENSE)
+
+FieldSeal Suite is open source under the MIT License. The MIT License does not
+restrict, condition or delay any right it grants. Commercial support,
+integration, training and assurance services are optional and are not a
+condition of using the software.
+
+Trademarks
+
+"FieldSeal", "FieldSeal Suite" and the footer mark "FieldSeal Suite v0.5 —
+Copyright (c) 2026 FieldSeal Suite contributors" are trademarks of the FieldSeal
+Suite project (Jerome Young / Yang Jie). The MIT License does not grant any
+trademark, trade name, domain
+name or slogan rights. See TRADEMARK.md.
+
+Third-party code
+
+This product has ZERO third-party runtime dependencies. The trusted kernel
+(cli/core/ and pwa/core/) uses only Node.js built-in modules and Web-native
+APIs (Web Crypto, Web Streams). There is no npm runtime package, no CDN fetch,
+no third-party WebAssembly, and no vendored third-party crypto/zip/pdf library.
+The files under `pwa/vendor/` are first-party adapters written by the project
+(SPDX-License-Identifier: MIT), not third-party libraries.
+
+External services (not embedded code)
+
+The optional, off-by-default "Aegis" hash-anchor toggle talks to a user-configured
+endpoint over HTTP; it sends only a textual root hash, package id and spec version.
+The optional, off-by-default external RFC3161 TSA mode sends only the textual root
+hash to a user-configured endpoint; that endpoint may be a third party outside the
+user's jurisdiction and the user is responsible for the transfer assessment.
+Neither service changes the local-first, offline-by-default behavior. See
+docs/EXTERNAL-TSA-DISCLOSURE.md.
+
+Build-time / test tooling is not shipped in the runtime product:
+  - Headless-Chrome browser checks (cli/test/ui-browser-check.mjs) — dev/test only
+  - python3 -m http.server (local static serving) — local runtime tool, not a dependency
+
+For the authoritative dependency boundary see SBOM.md and SBOM.cdx.json.
+The MIT license text is in the repository-root LICENSE.

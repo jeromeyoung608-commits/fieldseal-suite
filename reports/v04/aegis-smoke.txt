@@ -1,0 +1,62 @@
+### Result
+{"offReq":0,"emptyReq":0,"onReq":1,"badReq":1,"posted":"{\"packageId\":\"febf04b5-8227-4009-a8a3-674b7d8f74ab\",\"specVersion\":\"fieldseal-case-v0.4\",\"rootHash\":\"sha256:c1dc32a8428d6810ada2928a6d507ea04e92087789b62ee9f7a4cc512ddf32c2\"}","toasts":["Aegis deaktiviert: kein Upload. / Aegis disabled: no upload.","Bitte Aegis-Ziel-Adresse angeben. / Please enter the Aegis target URL.","Sende Hash an Aegis ... / Submitting hash to Aegis ...","Hash erfolgreich an Aegis uebermittelt. / Hash submitted to Aegis successfully.","Sende Hash an Aegis ... / Submitting hash to Aegis ...","Uebermittlung fehlgeschlagen. Die Beweismittel sind lokal unveraendert. / Submit failed. Evidence remains unchanged locally."],"beforeRoot":"sha256:c1dc32a8428d6810ada2928a6d507ea04e92087789b62ee9f7a4cc512ddf32c2","afterRoot":"sha256:c1dc32a8428d6810ada2928a6d507ea04e92087789b62ee9f7a4cc512ddf32c2","spec":"fieldseal-case-v0.4"}
+### Ran Playwright code
+```js
+await (async () => {
+  const BASE="http://127.0.0.1:8123/pwa/";
+  const MOCK="http://127.0.0.1:8731/aegis";
+  const cid = await page.evaluate(async () => {
+    const K=await import("./core/case-manifest.js");
+    const S=await import("./helpers/case-store.js");
+    for(const c of await S.listCases()) if(String((c.caseMeta||{}).title||"").startsWith("AEGIS")) await S.deleteCase(c.packageId);
+    let d=await K.createCase({metaTemplate:"blank",caseMeta:{title:"AEGIS smoke"}});
+    d=await K.sealCase(d,{actorName:"Tester"});
+    await S.putCase(d);
+    return d.packageId;
+  });
+  const exportZip = async (id, name) => {
+    return await page.evaluate(async (arg) => {
+      const { getCase, listEvidencePackages } = await import("./helpers/case-store.js");
+      const { buildCaseExportZip } = await import("./helpers/case-export.js");
+      const c = await getCase(arg.cid2);
+      const pkgs = await listEvidencePackages(c.packageId);
+      const blob = await buildCaseExportZip(c, pkgs, {});
+      const buf = new Uint8Array(await blob.arrayBuffer());
+      let s=""; for (const x of buf) s+=String.fromCharCode(x);
+      const b64 = btoa(s);
+      const r = await fetch("http://127.0.0.1:8731/store?name="+arg.name2, {method:"POST", headers:{"Content-Type":"text/plain"}, body:b64});
+      await r.text();
+      return { rootHash: c.rootHash, spec: c.specVersion };
+    }, {cid2:id, name2:name});
+  };
+  const before = await exportZip(cid, "before");
+  await page.goto(BASE+"case-detail.html?id="+cid,{waitUntil:"domcontentloaded"});
+  await page.waitForSelector("#aegis-push",{timeout:6000});
+  const reqs=[];
+  page.on("request",r=>{ if(r.url().includes("127.0.0.1:8731/aegis")) reqs.push({m:r.method(),p:r.postData()}); });
+  await page.click("#aegis-push"); await page.waitForTimeout(200);
+  const offReq=reqs.length;
+  await page.check("#aegis-enable");
+  await page.fill("#aegis-url","");
+  await page.click("#aegis-push"); await page.waitForTimeout(200);
+  const emptyReq=reqs.length;
+  await page.fill("#aegis-url",MOCK);
+  await page.click("#aegis-push"); await page.waitForTimeout(400);
+  const onReq=reqs.length;
+  const posted=reqs[reqs.length-1]?reqs[reqs.length-1].p:null;
+  await page.fill("#aegis-url","http://127.0.0.1:9/aegis");
+  await page.click("#aegis-push"); await page.waitForTimeout(400);
+  const badReq=reqs.length;
+  const toasts=await page.evaluate(()=>Array.from(document.querySelectorAll(".toast")).map(t=>t.innerText));
+  const after = await exportZip(cid, "after");
+  await page.evaluate(async(id)=>{const S=await import("./helpers/case-store.js");await S.deleteCase(id);},cid);
+  await page.setViewportSize({width:1280,height:720});
+  return {offReq,emptyReq,onReq,badReq,posted,toasts,beforeRoot:before.rootHash,afterRoot:after.rootHash,spec:before.spec};
+})(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8123/pwa/case-detail.html?id=febf04b5-8227-4009-a8a3-674b7d8f74ab
+- Page Title: AEGIS smoke - FieldSeal
+- Console: 1 errors, 0 warnings
+### Events
+- New console entries: .playwright-cli/console-2026-11-13T02-53-48-978Z.log#L8-L10

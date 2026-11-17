@@ -1,0 +1,74 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FieldSeal Suite</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+</head>
+<body>
+<div class="wrap">
+ <div class="topbar">
+ <div class="brand">
+ <img src="./assets/icon.svg" alt="FieldSeal">
+ <div>
+ <h1>FieldSeal Suite</h1>
+ <p data-i18n="app.tagline">Local on-scene capture · No cloud</p>
+ </div>
+ </div>
+ <span class="net-state" id="net-state">Offline-ready</span>
+ <span id="lang-switch" class="lang-switch-host"></span>
+ </div>
+
+ <p class="hint">Everything stays on this device. No automatic uploads.</p>
+
+ <div class="card" id="quick-home-card" style="margin-bottom:18px;border-color:#8b2b2b">
+ <h2 data-i18n="home.quick.title">Emergency quick capture</h2>
+ <p class="hint" data-i18n="home.quick.desc">One click: start the camera, record video, add the title afterwards.</p>
+ <a class="btn btn-danger" id="quick-home-link" href="./newcase.html?origin=emergency&v=18" data-i18n="home.quick.cta">Record now</a>
+ </div>
+
+ <div class="nav-grid">
+ <a class="nav-card" href="./cases.html">
+ <h2 data-i18n="nav.cases">Case Management</h2>
+ <p data-i18n="nav.cases.desc">Structure on-scene evidence into a parent case, manage templates, capture repeatedly, and seal irreversibly.<br></p>
+ </a>
+ <a class="nav-card" href="./capture.html">
+ <h2 data-i18n="nav.capture">Field Evidence</h2>
+ <p data-i18n="nav.capture.desc">Pack photo, video, GPS, notes and tags into a verifiable evidence.zip.<br>GPS / CLI</p>
+ </a>
+ <a class="nav-card" href="./sign.html">
+ <h2 data-i18n="nav.sign">SignCanvas</h2>
+ <p data-i18n="nav.sign.desc">Import an evidence.zip, sign with multiple parties, and irreversibly lock it via Seal.<br></p>
+ </a>
+ </div>
+
+ <div class="card" style="margin-top:18px">
+ <h2 data-i18n="verify.title">Verify</h2>
+ <p class="hint" data-i18n="verify.hint">After export, verify the package with the zero-dependency CLI.</p>
+ <pre>node cli/bin/audit.js verify ./evidence.zip --json</pre>
+ </div>
+
+ <footer>
+ <p data-lang="en"><strong>EN</strong> This tool produces tamper-resistant records. It is NOT a qualified electronic signature under eIDAS. No guarantee of admissibility in court is given. Identity verification of all participants is the sole responsibility of the user. Device timestamps may be altered.</p>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</div>
+<script type="module">
+ import { registerServiceWorker, setOfflineIndicator } from './ui/components.js';
+ import { printStartupBanner } from './helpers/attribution.js';
+ import './core/i18n.js'; // v0.5 i18n: auto-mounts #lang-switch + translates static [data-i18n] markup / Attribution layer 2: startup console banner (project + version + license).
+ printStartupBanner();
+ registerServiceWorker();
+ setOfflineIndicator();
+</script>
+</body>
+</html>

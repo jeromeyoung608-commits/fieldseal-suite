@@ -1,0 +1,32 @@
+FieldSeal Suite — UI availability self-check
+DATE: 2026-11-16T02:28:52.902Z
+SESSION: uicheck
+BASE: http://127.0.0.1:8123/pwa/
+COMMAND: node cli/test/ui-availability.cjs
+
+PASS U-01  11 个主干页面渲染 + 三态案卷准备 + 无 JS 报错
+      {"ok":true,"pages":11,"bad":[],"errors":[],"rows":[{"n":"index.html","chars":1184,"footer":true,"buttons":0},{"n":"cases.html","chars":1585,"footer":true,"buttons":10},{"n":"newcase.html","chars":1235,"footer":true,"buttons":3},{"n":"capture.html","chars":1428,"footer":true,"buttons":7},{"n":"sign.html","chars":2458,"footer":true,"buttons":22},{"n":"custody.html","chars":1156,"footer":true,"buttons":5},{"n":"templates.html","chars":3505,"footer":true,"buttons":6},{"n":"case-detail.html","chars":4475,"footer":true,"buttons":43},{"n":"case-capture.html","chars":1310,"footer":true,"buttons":9},{"n":"case-custody.html","chars":1036,"footer":true,"buttons":1},{"n":"case-export.html","chars":2964,"footer":true,"buttons":9}],"ids":{"draft":"ded84b8e-3b16-4b8b-be16-888867a763d9","pending":"f09d05da-a643-4764-a403-a5696c843b6c","sealed":"ab03fea9-d9c4-4ee2-a568-cea15305ab88"}}
+PASS U-02  新建案卷按钮链路：列表 → 表单 → 创建 → 详情（真实点击）
+      {"ok":true,"v04":true,"spec":true,"banner":"state-banner state-draft","buttons":40}
+PASS U-03  CDP 死按钮检测：三态详情页 + 导出面板 + 列表页
+      {"ok":true,"dead":[],"rows":[{"name":"draft detail","total":43,"live":40,"disabled":3},{"name":"pending detail","total":44,"live":27,"disabled":17},{"name":"sealed detail","total":27,"live":9,"disabled":18},{"name":"export panel","total":9,"live":9,"disabled":0},{"name":"case list","total":12,"live":12,"disabled":0}]}
+PASS U-04  draft / pending_countersign / sealed 禁用态逻辑
+      {"ok":true,"errs":[],"draft":{"banner":"state-banner state-draft","schemaEnabled":true,"schemaTitle":"","captureAria":null,"sealDisabled":false,"disabledCount":3,"disabledMissingTitle":[],"v04":{"字典新增":true,"批量改字段":true,"保存水印配置":true,"应用可见水印":true,"生成快照":true,"登记快照":true,"追加第三方批注":true,"软删除":true,"保存报告品牌":true,"备份提醒预览":true,"配额检查":true}},"pending":{"banner":"state-banner state-pending_countersign","schemaEnabled":false,"schemaTitle":"DE / EN / : Gegenzeichnung ausstehend / nur Gegenzeichnungen und Signaturen duerfen ergaenzt werden. / Awaiting countersign: only countersign records may be appended.","captureAria":"true","sealDisabled":false,"disabledCount":15,"disabledMissingTitle":[],"v04":{"字典新增":false,"批量改字段":false,"保存水印配置":false,"应用可见水印":false,"生成快照":true,"登记快照":false,"追加第三方批注":true,"软删除":false,"保存报告品牌":false,"备份提醒预览":true,"配额检查":true}},"sealed":{"banner":"state-banner state-sealed","schemaEnabled":false,"schemaTitle":"DE / EN / : Versiegelt / alle Schreibvorgaenge sind dauerhaft gesperrt. / Sealed: all writes are permanently disabled.","captureAria":"true","sealDisabled":true,"disabledCount":16,"disabledMissingTitle":[],"v04":{"字典新增":false,"批量改字段":false,"保存水印配置":false,"应用可见水印":false,"生成快照":true,"登记快照":false,"追加第三方批注":false,"软删除":false,"保存报告品牌":false,"备份提醒预览":true,"配额检查":true}}}
+PASS U-05  下拉字典 / 批量编辑 / 批注 / 会签表单可录入，展开收起正常
+      {"ok":true,"capture":{"selects":2,"dictionaryDropdown":true,"options":["","sealed","damaged"]},"detail":{"wmOn":true,"decision":"Dissent","captures":0,"fileInput":true},"cs":{"name":"Alice","decision":"Approve","pad":true}}
+PASS U-06  Canvas 签名画布响应鼠标 / 触屏，清空 / 撤销不卡死
+      {"ok":true,"afterMouse":{"empty":false,"strokes":1,"preview":true},"afterUndo":{"empty":true,"strokes":0},"afterTouch":{"empty":false,"strokes":1},"afterClear":{"empty":true,"strokes":0},"undoBtnDisabled":true}
+PASS U-07  弹窗 / 确认框 / 告警提示可弹出、勾选门控、可关闭
+      {"ok":true,"fail":[],"leftoverDialogs":0}
+PASS U-08  日志 / 报告预览 / 分页 / 路由切换与刷新后控件状态
+      {"ok":true,"fail":[],"detail":{"cards":23,"tables":0,"v04":true,"audit":true},"exp":{"report":true,"h2":16,"panel":true,"result":"coreResult: ok\n0Kinder\nrootHash sha256:4744c325967fbaf0f68545317089d6652a32a14de8926bfaa5db5e0e9be23ddc\nsealHash sha256:4ccf50e71b0cc37aa0b5d89511c049268fbe4251d81850cb6edc62d583e421d1","downloads":4},"listRows":4,"banner":"state-banner state-sealed"}
+PASS U-09  导出按钮一键备份、勾选门控写盘、清理测试数据
+      {"ok":true,"download":"case-ab03fea9-sealed.zip","mainUnchanged":true,"cleaned":4}
+PASS U-11  拍照/录像走设备相机；只有「本地文件」打开文件选择器
+      {"ok":true,"fail":[],"targets":["capture.html","case-capture.html"]}
+PASS U-12  390×844 手机视口：无横向溢出 / 触控 ≥44px / 16px 输入 / 底部弹窗 / 打印样式不污染主 UI
+      {"ok":true,"fail":[],"pages":11,"rows":[{"page":"index.html","overflow":0,"small":0,"tiny":0,"inputFont":16,"wrapPad":14},{"page":"cases.html","overflow":0,"small":0,"tiny":0,"inputFont":16,"wrapPad":14},{"page":"newcase.html","overflow":0,"small":0,"tiny":0,"inputFont":16,"wrapPad":14},{"page":"capture.html","overflow":0,"small":0,"tiny":0,"inputFont":16,"wrapPad":14},{"page":"sign.html","overflow":0,"small":0,"tiny":0,"inputFont":16,"wrapPad":14},{"page":"custody.html","overflow":0,"small":0,"tiny":0,"inputFont":16,"wrapPad":14},{"page":"templates.html","overflow":0,"small":0,"tiny":0,"inputFont":16,"wrapPad":14},{"page":"case-detail.html","overflow":0,"small":0,"tiny":0,"inputFont":16,"wrapPad":14},{"page":"case-capture.html","overflow":0,"small":0,"tiny":0,"inputFont":16,"wrapPad":14},{"page":"case-custody.html","overflow":0,"small":0,"tiny":0,"inputFont":16,"wrapPad":14},{"page":"case-export.html","overflow":0,"small":0,"tiny":0,"inputFont":16,"wrapPad":14}],"dialog":{"right":390,"bottom":844,"w":390,"vw":390,"vh":844,"minBtn":47,"buttons":2,"radius":"18px"}}
+PASS U-10  控制台 0 JS 错误
+      "### Result\nTotal messages: 0 (Errors: 0, Warnings: 0)"
+
+UI-AVAILABILITY-OK

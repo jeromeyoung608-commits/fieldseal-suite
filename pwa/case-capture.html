@@ -1,0 +1,513 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Capture - FieldSeal Suite</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+</head>
+<body>
+<div class="wrap">
+ <div class="topbar">
+ <div class="brand">
+ <img src="./assets/icon.svg" alt="FieldSeal">
+ <div>
+ <h1 data-i18n="page.caseCapture.title">Capture</h1>
+ <p>One capture = one <span class="mono">fieldseal-evidence-v0.2</span> package</p>
+ </div>
+ </div>
+ <span class="net-state" id="net-state">Offline-ready</span>
+ <span id="lang-switch" class="lang-switch-host"></span>
+ </div>
+
+ <a class="back-link" href="./cases.html">&larr; Case list</a>
+
+ <div class="card" id="quick-title-card" hidden>
+ <h2>Quick Capture</h2>
+ <p class="hint" id="quick-status">Opening camera.</p>
+ <div class="row" id="quick-camera-actions" hidden><button class="btn btn-primary" id="quick-camera-start" type="button">Start camera and record</button><button class="btn btn-ghost" id="quick-camera-local" type="button">Local file</button></div>
+ <label class="field"><span>Title (optional, after recording)</span><input type="text" id="quick-title" placeholder="e.g. incident #2026-114"></label>
+ </div>
+
+ <div class="card">
+ <h2 id="case-head">Case</h2>
+ <div id="case-info"></div>
+ </div>
+
+ <div class="card" id="locked-card" hidden>
+ <div class="notice">This case is sealed. Captures are no longer possible.</div>
+ </div>
+
+ <div id="capture-area">
+ <div class="card">
+ <h2>Media</h2>
+ <p class="hint">Original files are written unchanged (STORE) into the ZIP.</p>
+ <div class="row">
+ <button class="btn" id="photo-btn">Photo</button>
+ <button class="btn" id="video-btn">Video</button>
+ <button class="btn btn-ghost" id="local-btn">Local files</button>
+ <button class="btn btn-ghost btn-danger" id="clear-btn">Clear</button>
+ </div>
+ <input type="file" id="photo-input" accept="image/*" capture="environment" multiple hidden>
+ <input type="file" id="video-input" accept="video/*" capture="environment" multiple hidden>
+ <input type="file" id="local-input" multiple hidden>
+ <ul class="file-list" id="file-list"></ul>
+ <details id="camera-details" style="margin-top:14px">
+ <summary>Device camera</summary>
+ <p class="hint" style="margin-top:10px">Photo / Video uses the device camera. If no camera is available or permission is denied, the local file picker opens automatically.</p>
+ <fieldseal-camera-panel id="camera"></fieldseal-camera-panel>
+ </details>
+ </div>
+
+ <div class="card" id="meta-card">
+ <h2>Capture metadata</h2>
+ <div class="grid-2">
+ <label class="field"><span>Latitude / lat</span><input type="text" id="lat" inputmode="decimal" placeholder="52.5200"></label>
+ <label class="field"><span>Longitude / lon</span><input type="text" id="lon" inputmode="decimal" placeholder="13.4050"></label>
+ </div>
+ <div class="row" style="margin-bottom:14px">
+ <button class="btn" id="gps-btn">Get position</button>
+ <span class="mono" id="gps-state">No coordinates yet</span>
+ </div>
+ <div class="grid-2">
+ <label class="field"><span>Actor</span><input type="text" id="actor" placeholder="Alice"></label>
+ <label class="field"><span>Role</span><input type="text" id="actor-title" placeholder="Forensic Investigator"></label>
+ </div>
+ <div class="grid-2">
+ <label class="field"><span>IANA timezone</span><input type="text" id="tz" placeholder="UTC"></label>
+ <label class="field"><span>Device reference / optional</span><input type="text" id="device-ref" placeholder="device-1"></label>
+ </div>
+ <label class="field"><span>Note</span><textarea id="note" placeholder=""></textarea></label>
+ <label class="field"><span>Tags (comma-separated</span><input type="text" id="tags" value=""></label>
+ </div>
+
+ <div class="card" id="global-card">
+ <h2>Case-wide fields / global</h2>
+ <p class="hint">Values are <span class="mono">caseMeta</span> stored and flow into the <span class="mono">sealHash</span>.</p>
+ <div id="global-fields"></div>
+ </div>
+
+ <div class="card" id="item-card">
+ <h2>Capture fields / item</h2>
+ <p class="hint">Values are stored in the case context; the <span class="mono">Collected</span> event is recorded in the custody log.</p>
+ <div id="item-fields"></div>
+ </div>
+
+ <div class="card">
+ <div class="row">
+ <button class="btn btn-primary" id="capture-btn" disabled>Save capture</button>
+ <a class="btn btn-ghost" id="back-link" href="./cases.html">Back</a>
+ </div>
+ <div class="result" id="result">
+ <div class="notice" style="margin-top:16px">Package built locally. Verify with CLI.<br><span class="mono">node cli/bin/audit.js verify ./&lt;packageId&gt;.zip --json</span></div>
+ <p><strong>packageId</strong><br><span class="mono" id="result-package-id"></span></p>
+ <p><strong>rootHash</strong><br><span class="mono" id="result-root-hash"></span></p>
+ <p><strong>Scope</strong><br><span class="mono" id="result-size"></span></p>
+ <div class="row">
+ <button class="btn" id="download-btn">Download single package</button>
+ <a class="btn btn-primary" id="to-detail" href="#">To case</a>
+ </div>
+ </div>
+ </div>
+ </div>
+
+ <footer>
+ <p data-lang="en"><strong>EN</strong> Device timestamps and GPS may be altered. This tool is NOT a qualified electronic signature under eIDAS. All data stays local.</p>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</div>
+
+<script type="module">
+ import './core/i18n.js';
+ import {
+ EVIDENCE_V02, buildEvidenceManifest, canonicalManifestText, sanitizeFileName,
+ sanityCheckMedia, normalizeDecimal
+ } from './core/evidence-manifest.js';
+ import { buildZip, inspectBlob } from './core/zip-builder.js';
+ import { isoUtcNow, uuidV4 } from './core/hash.js';
+ import { addCapture, attachEnvSnapshot } from './core/case-manifest.js';
+ import { captureEnvSnapshot } from './helpers/env-snapshot.js';
+ import { getCase, putCase, putEvidencePackage, available } from './helpers/case-store.js';
+ import {
+ el, formatBytes, showToast, confirmDialog, downloadBlob,
+ registerServiceWorker, setOfflineIndicator
+ } from './ui/components.js';
+ import { FEATURE_FLAGS, HOOK_LABELS, callHook } from './helpers/ext-hooks.js';
+ import './ui/camera-panel.js';
+
+ const $ = (id) => document.getElementById(id);
+ const STATE_LABEL = {
+ draft: 'Draft',
+ 'pending-configuration': 'Pending configuration',
+ sealed: 'Sealed'
+ };
+ const DECIMAL_INPUT_RE = /^-?\d+(?:\.\d+)?$/;
+registerServiceWorker();
+ setOfflineIndicator();
+
+ const caseId = new URLSearchParams(location.search).get('id');
+ const quick = new URLSearchParams(location.search).get('quick') === '1';
+ $('back-link').href = './case-detail.html?id=' + encodeURIComponent(caseId || '');
+ $('to-detail').href = './case-detail.html?id=' + encodeURIComponent(caseId || '');
+ $('case-head').textContent = 'Case' + (caseId ? caseId.slice(0, 8) : '?');
+
+ const state = { items: [], caseObj: null, lastBlob: null };
+
+ try { $('tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { $('tz').value = 'UTC'; } // --- dynamic schema field rendering ---
+ let currentCase = null; // v0.4 custom dictionaries drive the dropdown options; they are hash-bound in the manifest.
+ function dictionaryFor(f) {
+ const d = currentCase && currentCase.schemaDictionaries;
+ return d && Array.isArray(d[f.key]) ? d[f.key] : null;
+ }
+ function fieldInput(f) {
+ const attrs = { 'data-key': f.key };
+ const dict = dictionaryFor(f);
+ if (f.type === 'select' || f.type === 'boolean' || dict) {
+ const options = dict || (f.type === 'boolean'
+ ? ['true', 'false']
+ : (f.options || []));
+ const sel = el('select', attrs, [
+ el('option', { value: '', text: '' }),
+ ...options.map((o) => el('option', { value: o, text: o }))
+ ]);
+ return sel;
+ }
+ attrs.type = 'text';
+ if (f.type === 'datetime') attrs.placeholder = 'YYYY-MM-DDTHH:mm:ssZ (UTC)';
+ else attrs.placeholder = f.label;
+ return el('input', attrs);
+ }
+
+ function renderFields(host, fields, extraKeys) {
+ host.textContent = '';
+ const extra = extraKeys || [];
+ if (!fields.length && !extra.length) {
+ host.appendChild(el('div', { class: 'section-empty', text: 'No fields defined' }));
+ return;
+ }
+ for (const f of fields) {
+ host.appendChild(el('label', { class: 'field' }, [
+ el('span', { text: f.label + (f.required ? ' *' : '') }),
+ fieldInput(f)
+ ]));
+ } // v0.4: a dictionary may define a field id that is not part of the built-in schema. Render it / as a real <select> so a newly added dictionary NEVER produces a disappearing control.
+ for (const key of extra) {
+ host.appendChild(el('label', { class: 'field' }, [
+ el('span', { text: key + '(custom dictionary' }),
+ fieldInput({ key, label: key, type: 'select' })
+ ]));
+ }
+ }
+
+ function collectFields(host, fields) {
+ const out = {};
+ for (const node of host.querySelectorAll('[data-key]')) {
+ const key = node.dataset.key;
+ const raw = String(node.value || '').trim();
+ if (!raw) continue;
+ const def = fields.find((f) => f.key === key);
+ out[key] = def && def.type === 'boolean' ? raw === 'true' : raw;
+ }
+ return out;
+ }
+
+ function validateRequired(fields, values, label) {
+ const missing = fields.filter((f) => f.required && !(f.key in values)).map((f) => f.label || f.key);
+ if (missing.length) showToast(label + ': Required fields missing' + missing.join(', '), 'warn');
+ return missing.length === 0;
+ } // --- media ---
+ function guessType(file) {
+ if (file.type.startsWith('video')) return 'video';
+ if (file.type.startsWith('image')) return 'image';
+ return /\.(mp4|mov|webm|mkv|m4v|avi)$/i.test(file.name) ? 'video' : 'image';
+ }
+
+ function renderFiles() {
+ const list = $('file-list');
+ list.textContent = '';
+ if (!state.items.length) {
+ list.appendChild(el('li', { class: 'file-item' }, [
+ el('div', { class: 'file-meta' }, [el('strong', { text: 'No files yet' })])
+ ]));
+ }
+ state.items.forEach((item, index) => {
+ list.appendChild(el('li', { class: 'file-item' }, [
+ el('div', { class: 'file-meta' }, [
+ el('strong', { text: item.originalName }),
+ el('small', { text: item.name + ' | ' + formatBytes(item.size) + ' | ' + item.hash.slice(0, 20) + '...' })
+ ]),
+ el('button', {
+ class: 'btn btn-ghost btn-danger', text: 'Remove',
+ onclick: () => { state.items.splice(index, 1); renderFiles(); }
+ })
+ ]));
+ });
+ $('capture-btn').disabled = state.items.length === 0 || !state.caseObj || state.caseObj.state === 'sealed';
+ }
+
+ async function addFiles(fileList, forcedType) {
+ const files = Array.from(fileList || []);
+ if (!files.length) return;
+ for (const file of files) {
+ const type = forcedType || guessType(file);
+ const base = sanitizeFileName(file.name, type, state.items.length + 1);
+ let name = base;
+ let suffix = 1;
+ while (state.items.some((item) => item.name === name)) {
+ name = base.replace(/(\.[^.]+)$/, '-' + suffix + '$1');
+ suffix++;
+ }
+ if (file.size > 200 * 1024 * 1024) {
+ showToast('Large file must be read completely', 'warn');
+ }
+ const info = await inspectBlob(file);
+ state.items.push({ file, originalName: file.name, name, type, size: info.size, crc32: info.crc32, hash: info.sha256 });
+ }
+ renderFiles();
+ showToast(files.length + ' file(s) added', 'ok');
+ }
+
+ const camera = $('camera');
+ camera.addEventListener('capture', (event) => {
+ addFiles([event.detail.file], event.detail.type);
+ showToast('Camera capture added', 'ok');
+ if (quick) revealQuickAfterCapture();
+ });
+ camera.addEventListener('closed', () => { $('camera-details').open = false; }); // Photo / Video MUST use the device camera. Only "Local files" opens the file picker / directly; a missing camera or denied permission degrades to the matching file picker.
+ async function openCamera(mode, fallbackInputId, allowCaseback = true) {
+ const ok = await camera.open(mode);
+ $('camera-details').open = true;
+ if (ok) return true;
+ if (allowCaseback) {
+ showToast('Camera not available - local file picker', 'warn');
+ $(fallbackInputId).click();
+ } else {
+ $('quick-camera-actions').hidden = false;
+ $('quick-status').textContent = 'Camera unavailable. Allow camera access or choose a local file.';
+ }
+ return false;
+ }
+ $('photo-btn').addEventListener('click', () => openCamera('photo', 'photo-input'));
+ $('video-btn').addEventListener('click', () => openCamera('video', 'video-input'));
+ $('local-btn').addEventListener('click', () => $('local-input').click());
+ $('photo-input').addEventListener('change', (e) => { addFiles(e.target.files, 'image'); e.target.value = ''; });
+ $('video-input').addEventListener('change', (e) => { addFiles(e.target.files, 'video'); e.target.value = ''; });
+ $('local-input').addEventListener('change', (e) => { addFiles(e.target.files, null); e.target.value = ''; });
+ $('clear-btn').addEventListener('click', async () => {
+ if (state.items.length && await confirmDialog('Remove all files?')) {
+ state.items = []; renderFiles();
+ }
+ });
+
+ $('gps-btn').addEventListener('click', () => {
+ if (!navigator.geolocation) { showToast('Geolocation not available', 'warn'); return; }
+ $('gps-state').textContent = 'Getting position...';
+ navigator.geolocation.getCurrentPosition(
+ (p) => {
+ $('lat').value = p.coords.latitude.toFixed(6);
+ $('lon').value = p.coords.longitude.toFixed(6);
+ $('gps-state').textContent = 'GPS captured';
+ },
+ (err) => {
+ $('gps-state').textContent = 'GPS not available' + err.message;
+ showToast('Please enter manually', 'warn');
+ },
+ { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+ );
+ }); // --- capture submit ---
+ $('capture-btn').addEventListener('click', async () => {
+ const c = state.caseObj;
+ if (!available() || !c || c.state === 'sealed' || !state.items.length) return;
+ if (quick) {
+ const qt = ($('quick-title') && $('quick-title').value || '').trim();
+ if (qt) c.caseMeta.title = qt;
+ }
+ $('capture-btn').disabled = true;
+ try {
+ const isEmergency = c.state === 'pending-configuration';
+ const globals = isEmergency ? [] : c.schemaDef.globalFields;
+ const items = isEmergency ? [] : c.schemaDef.itemFields;
+ const globalValues = collectFields($('global-fields'), globals);
+ const itemValues = collectFields($('item-fields'), items);
+ if (!validateRequired(globals, globalValues, 'global') || !validateRequired(items, itemValues, 'item')) {
+ $('capture-btn').disabled = false; return;
+ }
+
+ let lat = $('lat').value.trim();
+ let lon = $('lon').value.trim();
+ let note = $('note').value.trim();
+ if (!DECIMAL_INPUT_RE.test(lat) || !DECIMAL_INPUT_RE.test(lon)) {
+ lat = '0'; lon = '0';
+ note = (note ? note + '\n' : '') + '[GPS unavailable / GPS not available; coordinates recorded as 0]';
+ showToast('No valid coordinates: 0 with a note', 'warn');
+ }
+ const gps = { lat: normalizeDecimal(lat), lon: normalizeDecimal(lon) };
+ const firstVideo = state.items.find((i) => i.type === 'video');
+ const mp4SanityCheck = firstVideo
+ ? await sanityCheckMedia(firstVideo.file, 'video')
+ : { status: 'skipped', note: 'no video in package' };
+ const tags = $('tags').value.split(',').map((t) => t.trim()).filter(Boolean);
+ const ts = isoUtcNow();
+
+ const manifest = await buildEvidenceManifest({
+ version: EVIDENCE_V02,
+ createdAt: ts,
+ files: state.items.map((i) => ({ name: i.name, hash: i.hash, type: i.type })),
+ gps, note, tags, mp4SanityCheck
+ });
+ const entries = [{ name: 'manifest.json', data: new TextEncoder().encode(canonicalManifestText(manifest)) }];
+ for (const i of state.items) {
+ entries.push({ name: i.name, blob: i.file, size: i.size, crc32: i.crc32, sha256: i.hash });
+ }
+ const blob = await buildZip(entries); // global field values bind into sealHash; must be set before addCapture rehashes.
+ Object.assign(c.caseMeta, globalValues);
+ await addCapture(c, {
+ evidenceId: uuidV4(),
+ packageId: manifest.packageId,
+ rootHash: manifest.rootHash,
+ spec: EVIDENCE_V02,
+ capturedUtc: ts,
+ ianaTz: $('tz').value.trim() || 'UTC',
+ actorName: $('actor').value.trim(),
+ actorTitle: $('actor-title').value.trim(),
+ itemValues,
+ note,
+ gps,
+ deviceRef: $('device-ref').value.trim() || null
+ });
+ await putEvidencePackage({
+ packageId: manifest.packageId,
+ caseId: c.packageId,
+ blob,
+ size: blob.size,
+ createdAt: ts
+ });
+ await putCase(c);
+
+ state.lastBlob = { blob, name: manifest.packageId + '.zip' };
+ $('result').classList.add('visible');
+ $('result-package-id').textContent = manifest.packageId;
+ $('result-root-hash').textContent = manifest.rootHash;
+ $('result-size').textContent = formatBytes(blob.size) + ' | ' + entries.length + ' entries';
+ showToast('Capture saved', 'ok');
+ } catch (e) {
+ showToast('Capture failed: ' + e.message, 'error');
+ } finally {
+ $('capture-btn').disabled = state.items.length === 0;
+ }
+ });
+
+ $('download-btn').addEventListener('click', () => {
+ if (state.lastBlob) downloadBlob(state.lastBlob.blob, state.lastBlob.name);
+ }); function revealQuickAfterCapture() {
+ $('quick-title-card').hidden = false;
+ $('meta-card').hidden = false;
+ $('file-list').hidden = false;
+ $('quick-status').textContent = 'Recording captured. Add a title/note, then save.';
+ $('capture-btn').disabled = false;
+ }
+
+ $('quick-camera-start').addEventListener('click', async () => {
+   $('quick-camera-actions').hidden = true;
+   const ok = await openCamera('video', 'video-input', false);
+   if (ok) setTimeout(() => { if (camera && !camera.recording) camera.startRecording(); }, 200);
+ });
+ $('quick-camera-local').addEventListener('click', () => $('local-input').click());
+
+ async function quickBoot(c) {
+ if (!quick) return;
+ $('quick-title-card').hidden = true;
+ $('meta-card').hidden = true;
+ $('global-card').hidden = true;
+ $('item-card').hidden = true;
+ $('camera-details').open = true;
+ $('photo-btn').hidden = true;
+ $('video-btn').hidden = true;
+ $('quick-status').textContent = 'Opening camera ...';
+ const ok = await openCamera('video', 'video-input', false);
+ if (ok) {
+ $('quick-camera-actions').hidden = true;
+ $('quick-status').textContent = 'Camera ready. Starting recording ...';
+ setTimeout(() => { if (camera && !camera.recording) camera.startRecording(); }, 350);
+ }
+ }
+
+ // --- boot ---
+ async function main() {
+ if (!caseId || !available()) {
+ $('case-info').textContent = 'Case ID missing or IndexedDB unavailable. / ID IndexedDB';
+ $('capture-area').hidden = true;
+ return;
+ }
+ let c;
+ try { c = await getCase(caseId); } catch (e) {
+ $('case-info').textContent = 'Load failed: ' + e.message;
+ $('capture-area').hidden = true; return;
+ }
+ if (!c) {
+ $('case-info').textContent = 'Case not found';
+ $('capture-area').hidden = true; return;
+ }
+ state.caseObj = c;
+ currentCase = c; // v0.5 envSnapshot — capture once at first capture; immutable afterwards; excluded from hashes.
+ if (c.state !== 'sealed' && !(c.caseMeta && c.caseMeta.envSnapshot)) {
+ try {
+ currentCase = await attachEnvSnapshot(currentCase, captureEnvSnapshot(window));
+ state.caseObj = currentCase;
+ await putCase(currentCase);
+ } catch (_e) { /* already captured or not allowed — ignore */ }
+ }
+ $('case-head').textContent = 'Case ' + (c.caseMeta.title || c.packageId.slice(0, 8));
+ $('case-info').appendChild(el('div', { class: 'row' }, [
+ el('span', { class: 'state-badge state-' + c.state, text: STATE_LABEL[c.state] || c.state }),
+ el('span', { class: 'mono', text: 'Template ' + c.schemaDef.metaTemplate })
+ ]));
+
+ if (c.state === 'sealed') {
+ $('locked-card').hidden = false;
+ $('capture-area').hidden = true;
+ return;
+ }
+ if (c.state === 'pending-configuration') {
+ $('global-card').hidden = true;
+ $('item-card').hidden = true;
+ $('capture-area').insertBefore(
+ el('div', { class: 'phase-note', text: 'Emergency mode: media is secured immediately; schema fields are captured after configuration is completed. Historical captures stay unchanged.' }),
+ $('capture-area').firstChild
+ );
+ } else {
+ const known = new Set([
+ ...(c.schemaDef.globalFields || []).map((f) => f.key),
+ ...(c.schemaDef.itemFields || []).map((f) => f.key)
+ ]);
+ const extraKeys = Object.keys(c.schemaDictionaries || {}).filter((k) => !known.has(k));
+ renderFields($('global-fields'), c.schemaDef.globalFields, extraKeys);
+ renderFields($('item-fields'), c.schemaDef.itemFields);
+ } // Reserved hook callbacks: barcode -> (scanText); QR -> (dataUrl). No third-party logic. / flag=false => completely hidden and the branch is never executed.
+ const hookRow = el('div', { class: 'row' }, []);
+ for (const id of ['EXTENSION_ZXING_BARCODE_SCAN', 'EXTENSION_QR_GENERATE']) {
+ if (FEATURE_FLAGS[id] !== true) continue;
+ hookRow.appendChild(el('button', {
+ class: 'btn', text: HOOK_LABELS[id] + ' (placeholder)',
+ onclick: () => {
+ const r = callHook(id, 'run', { caseId: c.packageId });
+ showToast(r.ok ? 'Extension placeholder: callback reserved, read-only copy' : r.message, r.ok ? 'info' : 'warn');
+ }
+ }));
+ }
+ if (hookRow.childNodes.length) $('capture-area').appendChild(hookRow);
+ renderFiles();
+ return c;
+ }
+ main().then((c) => { if (c && quick) quickBoot(c); });
+</script>
+</body>
+</html>

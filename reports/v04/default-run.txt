@@ -1,0 +1,158 @@
+FieldSeal Suite - zero-dependency self-test (Step 0-4)
+Fixtures: /Users/yangjie/CodeBuddy/20261111145003/fieldseal-suite/cli/test/fixtures/.tmp
+
+PASS N-01  minimal evidence v0.1 verifies ok  [sha256:78b3e659...]
+PASS N-02  full evidence v0.2 with aux preview verifies ok  [aux excluded from root hash tree]
+PASS N-03  UTF-8 note and tags survive canonical serialization
+PASS N-04  signature v0.1 with linked evidence verifies ok  [linkedEvidenceRootHash matched]
+PASS N-05  super-bundle recursively verifies both children ok  [sha256:2a88a1dd...]
+PASS N-06  report-html emits a standalone static HTML report  [no external resources, disclaimer present]
+PASS N-07a  16 MiB media file verified through streaming path  [16 MiB STORE entry hashed in chunks]
+PASS N-07b  ZIP64 EOCD/locator byte layout is correct
+PASS T-01  flipping one media byte is detected
+PASS T-02  appending one byte to video is detected
+PASS T-03  editing manifest note without rehashing is detected
+PASS T-04  replacing rootHash with another valid hash is detected
+PASS T-05  removing a declared file is detected
+PASS T-06  an undeclared root entry is rejected
+PASS T-07  unknown spec version is invalid_spec
+PASS T-08  malformed manifest JSON is invalid_spec
+PASS T-09  missing createdAt is invalid_spec
+PASS T-10  privately added manifest field is invalid_spec
+PASS T-11  wrong field type is invalid_spec
+PASS T-12  non-canonical JSON text still verifies via C2 recomputation  [ok (recomputed over parsed object)]
+PASS T-13  tampering an aux preview does not break an evidence package
+PASS T-14  illegal file name in files[] is invalid_spec  [files[].name violates C5]
+PASS X-01  linkedEvidenceRootHash mismatch is tampered
+PASS X-02  substituting the evidence package is tampered
+PASS X-03  signature without its evidence package is missing_linked_package
+PASS X-04  linkedEvidenceId pointing to an unknown package is missing_linked_package
+PASS X-05  replacing a bundle child without updating items[].hash is rejected  [SPEC priority: missing_linked_package over tampered]
+PASS X-06  tampering media inside a bundle child is caught by recursion
+PASS X-07  items[].packageId not matching the child is tampered
+PASS X-08  a bundle missing one declared child is tampered
+PASS X-09  bundle holding only a signature child is missing_linked_package
+PASS X-10  editing a sealed signature manifest is tampered
+PASS CL-01  CLI verify --json returns ok with the fixed top-level fields  [exit 0, 5 fixed fields]
+PASS CL-02  CLI exits 1 on a tampered package
+PASS CL-03  CLI bundle command produces a verifiable super-bundle  [bundle -> verify ok]
+
+-- PWA trusted core parity --
+PASS P-01  PWA and CLI canonical JSON / root hash agree byte for byte  [C2 / C3 identical across runtimes]
+PASS P-02  PWA core evidence v0.2 package verifies ok in the CLI  [v0.2 -> CLI verify ok]
+PASS P-03  PWA core evidence v0.1 package verifies ok in the CLI  [v0.1 -> CLI verify ok]
+PASS P-04  a PWA package with swapped media bytes is rejected by the CLI
+PASS P-05  PWA helpers honour C5 names, decimal strings and container checks  [frozen schema constraints honoured]
+PASS P-06  PWA core reads and validates a PWA-produced evidence package  [trusted core validates evidence before Seal]
+PASS P-07  Seal produces a signature package that CLI verifies with linked evidence  [CLI verify + evidenceRootHash binding ok]
+PASS P-08  Seal locks the session: a second seal is rejected
+PASS P-09  substituting the evidence package breaks the signature binding
+PASS P-10  a signature package without its evidence is missing_linked_package
+PASS P-11  canvasSnapshotHash equals the sealed snapshot bytes and is bound by rootHash  [C9 binding verified]
+
+-- Step 4 end-to-end integration --
+PASS E-01  full chain: PWA capture -> Seal -> CLI verify -> bundle -> verify (x3)  [3 iterations of the full pipeline closed]
+PASS E-02  tampering a captured photo is detected by the CLI  [CLI verify rejects tampered media]
+PASS E-03  editing the manifest note without rehashing is detected  [CLI verify rejects tampered manifest]
+PASS E-04  replacing the evidence package inside the bundle is detected  [substituted evidence breaks bundle binding]
+
+-- Step 4 dual signing mode (§I) --
+PASS I-01  Joint mode: PWA seal -> CLI verify --linked ok, pluginExtras.signMode=joint  [joint signature verified with signMode surfaced]
+PASS I-04  Independent mode: two independent signers on same evidence both verify  [two independent signature packages both verify]
+PASS I-05  Independent isolation: tampering signer A does not affect signer B  [A tampered, B unaffected]
+PASS I-07  Mixed bundle: evidence + joint + independent signatures archive and verify  [mixed archive verifies all 4 children]
+PASS I-10  Audit HTML report distinguishes signMode  [HTML report renders signMode]
+
+-- code provenance static self-check --
+PASS K-01  Recipient local audit log: opt-in, fields, timezone, JSON/TXT export  [local audit log fields + opt-in verified]
+PASS K-03  Recipient log in bundle aux: tamper/delete aux does not affect rootHash  [aux log tamper/delete does not affect rootHash]
+PASS K-04  Batch verify classifies mixed evidence/signature/bundle/supplement  [mixed directory classified]
+PASS K-05  Batch flags tampered / missing-linked / legacy packages correctly  [tampered / missing / legacy classified]
+PASS K-06  Large bundle with many children verifies stably via batch  [200-child bundle batch ok]
+PASS K-07  Legacy packages without extension fields verify via batch  [legacy packages batch ok]
+PASS D-01  Tamper any manifest hash-binding field -> coreResult tampered  [manifest hash-binding tamper detected at all three layers]
+PASS D-02  Tamper aux/log/report files does not affect main package  [aux tamper isolated from root hash]
+PASS D-03  Wrong cross-package binding (evidenceId) is intercepted  [cross-package binding interception verified]
+PASS D-04  Circular supersedes chain is reported, not crashed  [circular supersedes reported without crash]
+PASS D-05  Oversized media + long/special-char fields: ok and report renders  [oversized media and edge-case fields handled]
+PASS D-06  Offline / Service Worker presence (static; full offline needs browser)  [offline assets present (full offline interaction requires manual browser verification)]
+PASS D-07  Mixed bundle (evidence+joint+independent+supplement+revision) verifies recursively  [mixed bundle all child types verified]
+PASS D-08  Repeated export/import + log append stability  [log append and repeated verification stable]
+
+-- chain-of-custody & audit features (§C) --
+PASS C-01  CLI custody injects metadata, hash-bound, verifies ok  [custody injected and hash-bound]
+PASS C-02  Invalid custody rejected by kernel  [invalid custody kernel-rejected]
+PASS C-03  Tampering custody metadata breaks rootHash  [custody tamper -> tampered]
+PASS C-04  SHA3-256 manifest binding via CLI  [sha3-256 binding verified]
+PASS C-05  verify --strict / --audit-only modes  [strict/audit-only branch logic works]
+PASS C-06  audit schema emits custody spec  [schema.json emitted]
+PASS C-07  aux GDPR redaction + retention timer  [GDPR redaction + retention works]
+PASS C-08  CSV report maps SOC2 columns + custom field columns  [CSV SOC2 mapping + custom columns]
+
+-- case-layer foundation (§C-case, new wrapper spec) --
+PASS C-09  standard case creates draft with schema + hashes  [standard draft ok]
+PASS C-10  emergency path: pending-configuration blocks seal, supplement unlocks  [emergency flow ok]
+PASS C-11  captures append child + Collected event; sealHash binds children  [capture binding ok]
+PASS C-12  schema change logs + version bump; deletion does not purge history  [schema edit + retention ok]
+PASS C-13  seal fixes sealHash; tampering any bound data fails verify  [seal + tamper detection ok]
+PASS C-14  CLI case verify round-trip (dir + zip) and child tamper  [CLI case verify ok (dir + zip)]
+(node:83029) ExperimentalWarning: The SHA3-256 Web Crypto API algorithm is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+PASS C-15  case supports sha3-256 algorithm binding  [sha3-256 case binding ok]
+
+-- case-layer Phase 3 flows (capture & custody) --
+PASS C-16  standard capture: frozen v0.2 package -> Collected event -> case verifies ok  [capture -> verify ok, frozen verifier unchanged]
+PASS C-17  tampering child / caseMeta / custody note all break case integrity  [all four tamper vectors detected]
+PASS C-18  emergency: capture while pending -> supplement -> history preserved  [emergency capture survives supplementation]
+PASS C-19  custody events: enum validation, sealHash binding, sealed lock  [custody flow ok]
+PASS C-20  case-store persists evidence ZIPs and cascades deletion  [evidence store + cascade delete ok]
+
+-- case-layer Phase 4 flows (seal & export) --
+PASS C-21  sealCase locks everything; any post-seal mutation fails verification  [seal locks + tamper vectors detected]
+PASS C-22  export ZIP layout is directly verifiable by CLI case verify  [export ZIP -> case verify ok, hashes self-contained]
+PASS C-23  tampered child package / case metadata fail CLI case verify  [child + metadata tamper detected by case verify]
+PASS C-24  HTML Attestation / CSV ledger / export preflight  [report/CSV/preflight conform to SPEC-case]
+
+-- case-layer v0.3 (Countersign + Encryption + Signature) --
+PASS C-25  explicit specVersion selects the path; legacy v0.2 aggregate stays frozen  [version dispatch explicit; legacy aggregate frozen]
+PASS C-30  v0.2 golden fixture -> exact rootHash/sealHash strings + canonical injectivity  [golden strings exact + canonical injective]
+PASS C-31  stripping v0.3 fields / specVersion => tampered; unknown version => invalid_spec  [no shape-based version inference; all downgrades caught]
+PASS C-26  Schema Lock gates schema edits, is audited and hash-bound  [lock/unlock gated, audited, hash-bound]
+PASS C-27  pending_countersign is read-only except countersigns; Seal Final locks  [workflow read-only + countersign hash binding + Seal Final]
+PASS C-28  AES-GCM/PBKDF2 round trip, generic decrypt error, metadata hash binding  [AES-GCM round trip + generic error + metadata bound to hashes]
+PASS C-29  v0.3 export carries sha256sum manifest, cipher copy and full attestation  [sha256sum + cipher + signature attachment + attestation + CLI verify ok]
+PASS C-33  contract A: encryption is forbidden after sealing; sealHash stays byte-fixed  [方案 A: sealed 全局锁死，加密不触碰封存态]
+PASS C-34  plaintext manifest verifies with no password; encrypted-only => needs_password  [plaintext verifiable without password; encrypted-only explicitly needs_password]
+PASS C-32  wrong passphrase != cipher tampering; IV/tag tampering is hash-bound  [password error / byte tampering / metadata tampering kept distinct]
+PASS C-35  duplicate signer is explicitly rejected; earlier decision never overwritten  [idempotent-by-rejection; append-only, no overwrite]
+PASS C-36  DB v2 -> v4 upgrade keeps cases; deleteCase cascades all blobs; stale writes refused  [v2->v4 additive migration + full cascade + stale-write guard]
+
+-- v0.4 second-round regression (C-37..C-46) --
+PASS C-37  v0.2 + v0.3 golden fixtures keep their exact sealHash strings  [v0.2=8f0b344d… v0.3=6fb3fd1c…]
+PASS C-38  tampering / stripping schemaDictionaries -> tampered, no shape inference  [dictionary hash-bound; no field-shape fallback]
+PASS C-39  batch field update: one audit event with affectedCaptureIds, rootHash changes  [single BATCH_FIELD_UPDATE event, 2 affected captures]
+PASS C-40  watermark dual digests in manifest; tampering either one -> tampered  [rootHash binds both digests; sealHash aggregate untouched]
+PASS C-41  snapshot is an independent archive package; generation never mutates the main case  [independent snapshot opens; draft + sealed main case byte-identical]
+PASS C-42  third-party notes are hash-bound, independent of countersignList, sealed append refused  [pending append allowed; sealed refused; note is sealHash-bound]
+PASS C-43  soft delete is hash-bound, restore is consistent, sealed forbids it  [soft delete / restore hash-bound, no physical deletion]
+PASS C-44  migration: draft -> v0.4 with data intact; pending/sealed refused and stay read-only  [draft migrates + old export still v0.3; pending/sealed read-only]
+PASS C-45  hooks: flag off hides, on-without-library degrades, products in /attachments and sha256 only  [5 flags default false; degrade cleanly; /attachments in sha256 only]
+PASS C-46  attachment byte tampering and signature digest mismatch both -> tampered  [attachments + signatures both byte-verified by the frozen CLI]
+PASS S-01  no package.json / lockfile / node_modules in trusted core or repo root
+PASS S-02  cli JS only requires Node built-ins or local handwritten files  [11 cli JS files scanned]
+PASS S-03  pwa JS imports only local handwritten files; no external importmap  [27 pwa JS files scanned]
+PASS S-04  no CDN, remote script, remote stylesheet or remote font  [13 HTML/webmanifest files scanned]
+PASS S-05  no vendored source, minified bundles or oversized generated JS
+PASS S-06  no generator / bundler scaffolding artifacts
+PASS S-07  SHA256 and ZIP use platform built-ins, no handwritten crypto primitive  [Q6 boundary honoured, 8 core JS files scanned]
+PASS S-08  static self-check runs as one zero-dependency read-only command  [node cli/test/test-runner.js]
+PASS S-09  PWA trusted core is dependency-free, WebCrypto-based and locally imported  [7 core JS + 13 pages scanned]
+PASS S-10  front-end self-check: dual signing mode UI boundaries  [sign.html + webrtc-sync.js mode boundaries verified]
+PASS S-11  custody features: CLI entry / schema / modes / independent popup  [custody CLI + independent popup verified]
+PASS S-12  case-layer wrapper spec does not fork the frozen evidence contract  [case wrapper isolated from frozen contract]
+PASS S-13  Phase 3 capture/custody UI + evidence storage stay on the shared kernel  [Phase 3 UI + storage isolated and kernel-backed]
+PASS S-14  Phase 4 export is hash-free presentation and stays case-verify compatible  [export layer isolated, verifier-compatible, UI gated]
+PASS S-15  v0.3 Core Baseline full self-check (Countersign + Encryption + Signature)  [kernel + helpers + UI + sw + spec v0.3 baseline verified]
+PASS S-16  v0.4 second-round full self-check (11 items)  [11/11 S-16 items green]
+
+131/131 passed

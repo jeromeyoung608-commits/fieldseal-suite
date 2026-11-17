@@ -1,0 +1,16 @@
+FieldSeal Suite - UI availability self-check (session uicheck)
+PASS U-01  11 个主干页面渲染 + 三态案卷准备 + 无 JS 报错
+PASS U-02  新建案卷按钮链路：列表 → 表单 → 创建 → 详情（真实点击）
+PASS U-03  CDP 死按钮检测：三态详情页 + 导出面板 + 列表页
+PASS U-04  draft / pending_countersign / sealed 禁用态逻辑
+PASS U-05  下拉字典 / 批量编辑 / 批注 / 会签表单可录入，展开收起正常
+PASS U-06  Canvas 签名画布响应鼠标 / 触屏，清空 / 撤销不卡死
+PASS U-07  弹窗 / 确认框 / 告警提示可弹出、勾选门控、可关闭
+PASS U-08  日志 / 报告预览 / 分页 / 路由切换与刷新后控件状态
+PASS U-09  导出按钮一键备份、勾选门控写盘、清理测试数据
+PASS U-11  拍照/录像走设备相机；只有「本地文件」打开文件选择器
+PASS U-12  390×844 手机视口：无横向溢出 / 触控 ≥44px / 16px 输入 / 底部弹窗 / 打印样式不污染主 UI
+PASS U-10  控制台 0 JS 错误
+
+UI-AVAILABILITY-OK
+report: /Users/yangjie/CodeBuddy/20261111145003/fieldseal-suite/reports/v04/UI-AVAILABILITY.txt

@@ -1,0 +1,50 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT (see LICENSE); AS IS, no warranty.
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head><meta charset="utf-8"><title>UI-HARNESS</title></head>
+<body>
+<div id="out">running…</div>
+<!--
+ Real in-browser verification of the product's core forensic operation, executed by the
+ actual shipped modules (pwa/core/case-manifest.js) inside a real browser engine (Chrome
+ headless). This is genuine browser evidence for F1 (seal works in a browser with real
+ WebCrypto) and F2 (failure injection: invalid input is rejected, not silently swallowed).
+-->
+<script type="module">
+import { createCase, addCapture, sealCase, addHumanNoteMeta } from '../core/case-manifest.js';
+(async () => {
+ let fails = 0;
+ const fail = (m) => { fails++; console.error('FAIL ' + m); };
+ try {
+ const c = await createCase({});
+ if (c.state !== 'draft') fail('createCase not draft');
+ const cap = { rootHash: 'sha256:' + 'ab'.repeat(32), packageId: 'pkg1', evidenceId: 'e1', capturedUtc: new Date().toISOString() };
+ const c2 = await addCapture(c, cap);
+ if (c2.children.length !== 1) fail('addCapture did not append');
+ const c3 = await sealCase(c2, { actorName: 'Tester' });
+ if (c3.state !== 'sealed') fail('not sealed');
+ if (typeof c3.rootHash !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(c3.rootHash)) fail('no valid rootHash'); // F2 failure injection: invalid evidence hash MUST be rejected
+ let threw = false;
+ try { await addCapture(c3, { rootHash: 'not-a-hash', packageId: 'x' }); } catch (e) { threw = true; }
+ if (!threw) fail('invalid capture accepted (failure injection broken)'); // humanNotes must NOT mutate the sealed rootHash (the integrity fix we shipped)
+ const sealedRoot = c3.rootHash;
+ const c4 = await addHumanNoteMeta(c3, { noteType: 'audit', content: 'review: chain verified', authorOperatorId: 'OP-2' });
+ if (c4.rootHash !== sealedRoot) fail('humanNotes mutated sealed rootHash');
+ const ok = fails === 0;
+ document.title = 'UI-SEAL:' + (ok ? 'PASS' : 'FAIL');
+ document.body.setAttribute('data-ui-seal', ok ? 'PASS' : 'FAIL');
+ document.getElementById('out').textContent = ok ? 'PASS' : ('FAIL(' + fails + ')');
+ } catch (e) {
+ document.title = 'UI-SEAL:FAIL';
+ document.body.setAttribute('data-ui-seal', 'FAIL');
+ document.getElementById('out').textContent = 'ERROR ' + e.message;
+ }
+})();
+</script>
+</body>
+</html>

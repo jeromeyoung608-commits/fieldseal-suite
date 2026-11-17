@@ -1,0 +1,12 @@
+### Result
+{"snapshot":"snapshot-986eb6e7.zip","cleaned":1}
+### Ran Playwright code
+```js
+await (async () => { const BASE='http://127.0.0.1:8123/pwa/'; await page.goto(BASE+'case-detail.html?id=e8265b04-606f-438e-b4c9-0e1ddf861901',{waitUntil:'domcontentloaded'}); await page.waitForSelector('.state-banner'); const [d]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:/生成快照（只读导出）/}).click()]); await d.saveAs('/Users/yangjie/CodeBuddy/20261111145003/fieldseal-suite/reports/v04/snapshot.zip'); const cleaned=await page.evaluate(async ()=>{const S=await import('./helpers/case-store.js');let n=0;for(const c of await S.listCases()){if(String((c.caseMeta||{}).title||'').startsWith('UI-CHECK')){await S.deleteCase(c.packageId);n++;}}return n;}); return {snapshot:d.suggestedFilename(),cleaned}; })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8123/pwa/case-detail.html?id=e8265b04-606f-438e-b4c9-0e1ddf861901
+- Page Title: UI-CHECK smoke - FieldSeal
+### Events
+- Downloading file snapshot-986eb6e7.zip ...
+- Downloaded file snapshot-986eb6e7.zip to ".playwright-cli/snapshot-986eb6e7.zip"

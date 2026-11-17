@@ -1,0 +1,82 @@
+name: FieldSeal Suite CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      # Zero-dependency by design: there is no `npm install` step anywhere in this
+      # workflow. If a gate ever needs one, the claim in the README is already false.
+      - name: No dependency install (zero-dependency suite)
+        run: |
+          if [ -f package.json ]; then echo "FAIL: package.json present at the root"; exit 1; fi
+          echo "OK: no root package.json (zero-dependency)"
+
+      - name: Licensing headers + legal set
+        run: node scripts/verify-licensing.mjs
+
+      - name: Language policy (English-only, no German dictionary)
+        run: node scripts/verify-bilingual.mjs
+
+      - name: Attribution watermark
+        run: node scripts/verify-watermark.mjs
+
+      - name: PWA unit tests
+        run: node cli/test/pwa-tests.mjs
+
+      - name: Kernel self-check + CLI + case gates (S-01..S-16)
+        run: node cli/test/test-runner.js
+
+      - name: Audit acceptance (real openssl RFC3161 round-trip)
+        run: node cli/bin/audit-acceptance.mjs
+
+      - name: Doctor health check
+        run: node cli/bin/doctor.mjs --json
+
+      - name: Reproducible build self-test
+        run: node tools/build/repro-build.mjs --self-test
+
+      - name: Installer dry-run
+        run: |
+          chmod +x install.sh
+          ./install.sh --verify-only || true
+          test -x install.sh
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the runtime image
+        run: docker build -t fieldseal-ci .
+
+      # The app is served under /pwa/; "/" redirects to /pwa/index.html by design.
+      # Probing "/" alone would pass even if every real page 404'd, so the loop
+      # below checks the pages a user actually clicks.
+      - name: Start it and probe every user-facing page
+        run: |
+          docker run -d --name fieldseal-ci -p 8123:8123 fieldseal-ci
+          for i in $(seq 1 30); do
+            curl -fsS http://localhost:8123/ >/dev/null 2>&1 && break
+            sleep 1
+          done
+          fail=0
+          for p in pwa/index.html pwa/capture.html pwa/cases.html pwa/sign.html \
+                   pwa/custody.html pwa/case-export.html pwa/manifest.webmanifest pwa/sw.js; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' "http://localhost:8123/$p")
+            printf '%-30s %s\n' "/$p" "$code"
+            [ "$code" = "200" ] || fail=1
+          done
+          docker logs fieldseal-ci | tail -10
+          docker rm -f fieldseal-ci
+          test "$fail" = "0"

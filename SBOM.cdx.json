@@ -1,0 +1,162 @@
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "metadata": {
+    "timestamp": "2026-11-15T12:00:00.000Z",
+    "component": {
+      "type": "application",
+      "name": "fieldseal-suite",
+      "version": "0.5.0",
+      "description": "FieldSeal Suite — local forensic capture, joint/independent countersign, and unified verification toolkit. Open source under the MIT License; the MIT License does not restrict or condition any right it grants. Commercial support/integration/assurance are optional services, not dependencies. ZERO third-party runtime dependencies: the trusted kernel uses only Node.js built-in modules and Web-native APIs (Web Crypto, Web Streams). No npm runtime package, no CDN, no third-party WebAssembly, no vendored crypto/zip/pdf library. Browser checks use headless Chrome as dev/test tooling only (not shipped).",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "bom-ref": "fieldseal-suite"
+    }
+  },
+  "components": [
+    {
+      "type": "framework",
+      "name": "Node.js built-in modules",
+      "version": ">=18",
+      "bom-ref": "platform:node",
+      "scope": "required",
+      "description": "node:crypto, node:fs, node:path, node:stream, node:zlib, node:url, node:child_process, etc. Built into the Node.js runtime; not a third-party package.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "fieldseal:scope",
+          "value": "platform built-in (not shipped, not vendored)"
+        }
+      ]
+    },
+    {
+      "type": "framework",
+      "name": "Web Crypto / Web Streams APIs",
+      "version": "platform",
+      "bom-ref": "platform:web",
+      "scope": "required",
+      "description": "Browser-native crypto.subtle and Web Streams used by pwa/core/. Not a third-party package.",
+      "licenses": [
+        {
+          "license": {
+            "name": "Web platform specification (W3C/WHATWG)"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "fieldseal:scope",
+          "value": "browser platform API (not shipped, not vendored)"
+        }
+      ]
+    },
+    {
+      "type": "file",
+      "name": "pwa/vendor (first-party adapters)",
+      "version": "v0.5",
+      "bom-ref": "firstparty:pwa-vendor",
+      "scope": "required",
+      "description": "First-party adapter/glue code written by the project (RFC3161 TSA adapter, extension-hook slot). SPDX-License-Identifier: MIT. NOT third-party code and NOT redistributed upstream code.",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "fieldseal:scope",
+          "value": "first-party code (MIT)"
+        },
+        {
+          "name": "fieldseal:thirdParty",
+          "value": "false"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "Headless Chrome",
+      "version": "dev/test only",
+      "bom-ref": "dev:headless-chrome",
+      "scope": "excluded",
+      "description": "Used by cli/test/ui-browser-check.mjs and ui-e2e.mjs for browser-subset verification. Not shipped in the runtime product.",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "fieldseal:scope",
+          "value": "dev/test tooling (not shipped)"
+        }
+      ]
+    },
+    {
+      "type": "application",
+      "name": "python3 http.server",
+      "version": "dev/test only",
+      "bom-ref": "dev:python-httpserver",
+      "scope": "excluded",
+      "description": "Optional local static file server for the PWA. Standard-library runtime tool, not a dependency and not shipped.",
+      "licenses": [
+        {
+          "license": {
+            "id": "Python-2.0"
+          }
+        }
+      ],
+      "properties": [
+        {
+          "name": "fieldseal:scope",
+          "value": "local runtime tool (not shipped)"
+        }
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "ref": "fieldseal-suite",
+      "dependsOn": [
+        "platform:node",
+        "platform:web",
+        "firstparty:pwa-vendor"
+      ]
+    },
+    {
+      "ref": "platform:node",
+      "dependsOn": []
+    },
+    {
+      "ref": "platform:web",
+      "dependsOn": []
+    },
+    {
+      "ref": "firstparty:pwa-vendor",
+      "dependsOn": []
+    },
+    {
+      "ref": "dev:headless-chrome",
+      "dependsOn": []
+    },
+    {
+      "ref": "dev:python-httpserver",
+      "dependsOn": []
+    }
+  ]
+}

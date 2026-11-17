@@ -1,0 +1,9 @@
+### Result
+{"url":"pwa/case-detail.html?id=3eb026e4-4aab-4f5f-bffa-1bf24a3fe646","hasV04":true,"specVersion":"specVersion fieldseal-case-v0.4","footer":true}
+### Ran Playwright code
+```js
+await (async () => { await page.getByRole('link', { name: /Neuer Fall \(Standard\)/ }).click(); await page.waitForURL(/newcase/); await page.getByRole('textbox', { name: /Titel/ }).fill('v0.4 smoke case'); await page.locator('#template').selectOption('builtin:blank'); await page.getByRole('button', { name: /Fall anlegen/ }).click(); await page.waitForURL(/case-detail/); const body = await page.locator('body').innerText(); return { url: page.url().slice(-60), hasV04: body.includes('v0.4 增量功能'), specVersion: (body.match(/specVersion [^ ]+/) || [])[0], footer: body.includes('FieldSeal Suite v0.4') }; })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8123/pwa/case-detail.html?id=3eb026e4-4aab-4f5f-bffa-1bf24a3fe646
+- Page Title: v0.4 smoke case - FieldSeal

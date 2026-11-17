@@ -1,0 +1,5 @@
+COMMAND: read_lints (IDE diagnostics, workspace root)
+DATE: 2026-11-12T05:53:55Z
+RESULT: totalCount = 0 (0 errors / 0 warnings)
+EQUIVALENT SYNTAX LINT: env CODEBUDDY_SAFE_DELETE_ENABLED=0 node cli/test/read-only-scanner.cjs page-modules
+EQUIVALENT RESULT: SYNTAX-AND-IMPORTS-OK (12 HTML / 18 PWA JS / 11 CLI JS / 11 inline modules / 61 relative imports)

@@ -1,0 +1,1 @@
+ISOLATED HELPER LAYER — canvas-draw.js, webrtc-sync.js, preview-encoder.js. Allowed to declare dependencies. Logic and preview artifacts never participate in root hash computation.

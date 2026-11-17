@@ -1,0 +1,8 @@
+OK   h2 sections = 14
+OK   report blocks 11-14
+OK   attribution footer + print footer
+OK   VERIFY v0.4 section
+OK   CSV header frozen
+OK   CSV attribution metadata
+OK   checksums cover manifest
+OK   export entries

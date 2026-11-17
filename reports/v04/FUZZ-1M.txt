@@ -1,0 +1,8 @@
+  ok  - fuzz: 1000000 cases ran without process crash
+  ok  - fuzz: no memory blow-up (Δ < 64MB over 1000000 cases)
+  ok  - chainHead stable on crafted entry
+FUZZ: PASS — harness wired; reuse with 72h / 1,000,000 cases for the external S5 gate
+
+real	0m57.330s
+user	0m34.605s
+sys	0m13.863s

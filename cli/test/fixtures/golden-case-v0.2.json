@@ -1,0 +1,58 @@
+{
+  "spec": "fieldseal-case-v0.1",
+  "packageId": "00000000-0000-4000-8000-000000000001",
+  "hashAlgorithm": "sha256",
+  "createdAt": "2026-01-01T00:00:00Z",
+  "caseCreatedUtc": "2026-01-01T00:00:00Z",
+  "caseOrigin": "standard",
+  "emergencyCaptureUtc": null,
+  "schemaSupplementedUtc": null,
+  "state": "sealed",
+  "schemaDef": {
+    "metaTemplate": "blank",
+    "mode": "full",
+    "version": 1,
+    "globalFields": [
+      { "key": "caseReference", "label": "Case Reference", "type": "text", "required": true }
+    ],
+    "itemFields": []
+  },
+  "caseMeta": { "caseReference": "GOLDEN-V02-0001" },
+  "children": [
+    {
+      "evidenceId": "ev-golden-1",
+      "packageId": "pkg-golden-1",
+      "rootHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "spec": "fieldseal-evidence-v0.2",
+      "capturedUtc": "2026-01-01T00:00:01Z"
+    }
+  ],
+  "custodyLog": [
+    {
+      "eventType": "Collected",
+      "utc": "2026-01-01T00:00:01Z",
+      "ianaTz": "UTC",
+      "actorName": "Golden Custodian",
+      "actorTitle": "Custodian",
+      "evidenceId": "ev-golden-1",
+      "itemHash": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "itemValues": {},
+      "note": "golden fixture",
+      "gps": null,
+      "deviceRef": null
+    },
+    {
+      "eventType": "Sealed",
+      "utc": "2026-01-01T00:00:02Z",
+      "ianaTz": "UTC",
+      "actorName": "Golden Custodian",
+      "actorTitle": "Custodian",
+      "transferPurpose": null,
+      "scope": "all",
+      "note": "golden seal",
+      "evidenceId": null
+    }
+  ],
+  "schemaChangeLog": [],
+  "sealedAt": "2026-01-01T00:00:02Z"
+}

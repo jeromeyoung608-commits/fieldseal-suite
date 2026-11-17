@@ -1,0 +1,9 @@
+### Result
+{"decryptAudit":true,"encryption":true}
+### Ran Playwright code
+```js
+await (async () => { try { await page.getByRole('button', { name: /Entschluesseln pruefen/ }).click(); await page.locator('.dialog-overlay input[type=password]').first().fill('Correct-Horse-2026'); await page.locator('.dialog-overlay button').filter({ hasText: /Entschluesseln \/ 解密/ }).click(); await page.waitForTimeout(2200); } catch (e) { /* reload */ } await page.waitForLoadState('domcontentloaded'); const body = await page.locator('body').innerText(); return { decryptAudit: body.includes('CASE_DECRYPT'), encryption: body.includes('AES-GCM-256 / PBKDF2-SHA256') }; })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8123/pwa/case-detail.html?id=fed938a2-09c8-4410-9122-9d897d03c45b
+- Page Title: Encryption smoke case v0.3 - FieldSeal

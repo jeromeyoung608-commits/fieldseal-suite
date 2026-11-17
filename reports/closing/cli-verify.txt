@@ -1,0 +1,8 @@
+{
+  "coreResult": "ok",
+  "specVersion": "fieldseal-case-v0.3",
+  "sealHash": "sha256:af933fe9fe7ff9e4c2dac86e96bae2d11347718870158ad25527488afdf5b0cc",
+  "rootHash": "sha256:43f7bf6687ef150565a7f7fde5d4701d2e4a17002ca23af814325cf36dffbe12",
+  "children": [],
+  "errors": []
+}

@@ -1,0 +1,20 @@
+{
+  "name": "FieldSeal Suite",
+  "short_name": "FieldSeal",
+  "description": "Local field evidence capture and verification - no cloud",
+  "lang": "de",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b0b0d",
+  "theme_color": "#0b0b0d",
+  "icons": [
+    {
+      "src": "./assets/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

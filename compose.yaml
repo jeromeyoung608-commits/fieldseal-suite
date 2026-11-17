@@ -1,0 +1,12 @@
+services:
+  fieldseal:
+    build: .
+    image: fieldseal-suite:local
+    ports:
+      - "8123:8123"
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+    restart: "no"

@@ -1,0 +1,43 @@
+{
+  "tool": "fieldseal-case-verify",
+  "generatedUtc": "2026-11-14T08:00:40.510Z",
+  "nodeBase": "node18",
+  "entry": "cli/bin/audit.js",
+  "usage": "fieldseal-case-verify case verify <case.zip|case-dir> [--json]",
+  "signature": {
+    "scheme": "ed25519-detached",
+    "status": "signed",
+    "signedFile": "SHA256SUMS",
+    "signatureFile": "SHA256SUMS.sig",
+    "publicKeyFile": "RELEASE-PUBLIC-KEY.pem",
+    "publicKeyFingerprint": "b35737bf3c1082c07236a1b03a2a4da1cb70b01ab733c0c43dcaf334821f86d1",
+    "signedUtc": "2026-11-14T08:25:32.501Z",
+    "note": "Verify offline with: node tools/release/release-tool.mjs verify-signature"
+  },
+  "binaries": [
+    {
+      "name": "fieldseal-case-verify-linux-x64",
+      "sha256": "29d94fae6226cbda732f6e5c98e0da5cfddf383fb4a61dad4f21d879656947ca",
+      "size": 46622920,
+      "target": "linux-x64"
+    },
+    {
+      "name": "fieldseal-case-verify-macos-x64",
+      "sha256": "5d5e9c23e9a51631b1b681b5ba20ce731bba199cb620185ac3b07d6adad596aa",
+      "size": 52031360,
+      "target": "macos-x64"
+    },
+    {
+      "name": "fieldseal-case-verify-macos-arm64",
+      "sha256": "b05122e0e22bd6b78145ad25969694773ec05944b8d045aa64b1fad7d8144296",
+      "size": 46946080,
+      "target": "macos-arm64"
+    },
+    {
+      "name": "fieldseal-case-verify-win-x64.exe",
+      "sha256": "cb2082f29891af0828351c5e3d2c706ce72e84ccf6e632399147b88a64d33ea7",
+      "size": 37992475,
+      "target": "win-x64"
+    }
+  ]
+}

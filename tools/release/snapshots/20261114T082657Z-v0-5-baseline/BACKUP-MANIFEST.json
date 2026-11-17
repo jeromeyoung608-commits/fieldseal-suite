@@ -1,0 +1,69 @@
+{
+  "spec": "fieldseal-release-v0.1",
+  "id": "20261114T082657Z-v0-5-baseline",
+  "label": "v0.5-baseline",
+  "createdUtc": "2026-11-14T08:26:58.185Z",
+  "sourceDist": "tools/build/dist",
+  "metadataOnly": true,
+  "signature": {
+    "spec": "fieldseal-release-v0.1",
+    "algorithm": "Ed25519",
+    "signedFile": "SHA256SUMS",
+    "signedUtc": "2026-11-14T08:25:32.501Z",
+    "sha256OfSignedFile": "b7976fc3ea56a37eb8ea4037fbdcc84c530466b46c72ca5eb0471f0bb1fc261a",
+    "publicKeyFile": "RELEASE-PUBLIC-KEY.pem",
+    "publicKeyFingerprint": "b35737bf3c1082c07236a1b03a2a4da1cb70b01ab733c0c43dcaf334821f86d1",
+    "signature": "O/rymOoOsjy2j2qkXZ7LA+iChKnpwB3r31FQyheetwn/4k0rBfysv/hmb7M89eo4nOSwItoi84Ntnd1o4B56CA=="
+  },
+  "files": [
+    {
+      "name": "RELEASE-PUBLIC-KEY.pem",
+      "sha256": "b35737bf3c1082c07236a1b03a2a4da1cb70b01ab733c0c43dcaf334821f86d1",
+      "size": 113,
+      "stored": true
+    },
+    {
+      "name": "SHA256SUMS",
+      "sha256": "b7976fc3ea56a37eb8ea4037fbdcc84c530466b46c72ca5eb0471f0bb1fc261a",
+      "size": 396,
+      "stored": true
+    },
+    {
+      "name": "SHA256SUMS.sig",
+      "sha256": "3504ca8e148257e3e64c9895f03f3faa83d5e8a42b2a9327d3681cc1899a0c31",
+      "size": 476,
+      "stored": true
+    },
+    {
+      "name": "fieldseal-case-verify-linux-x64",
+      "sha256": "29d94fae6226cbda732f6e5c98e0da5cfddf383fb4a61dad4f21d879656947ca",
+      "size": 46622920,
+      "stored": false
+    },
+    {
+      "name": "fieldseal-case-verify-macos-arm64",
+      "sha256": "b05122e0e22bd6b78145ad25969694773ec05944b8d045aa64b1fad7d8144296",
+      "size": 46946080,
+      "stored": false
+    },
+    {
+      "name": "fieldseal-case-verify-macos-x64",
+      "sha256": "5d5e9c23e9a51631b1b681b5ba20ce731bba199cb620185ac3b07d6adad596aa",
+      "size": 52031360,
+      "stored": false
+    },
+    {
+      "name": "fieldseal-case-verify-win-x64.exe",
+      "sha256": "cb2082f29891af0828351c5e3d2c706ce72e84ccf6e632399147b88a64d33ea7",
+      "size": 37992475,
+      "stored": false
+    },
+    {
+      "name": "manifest.json",
+      "sha256": "c791cc9016f0a22e66034faa60ce63c9f6aeaabc816b756aca356424dfe4d671",
+      "size": 1459,
+      "stored": true
+    }
+  ],
+  "backupHash": "ee5801380a95e52b2e6f8dc44364ccd809d7c4dc9ff8ce4b3d808a6274143569"
+}

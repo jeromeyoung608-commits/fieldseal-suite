@@ -1,0 +1,31 @@
+-- page inline-module syntax and import resolution --
+OK  cli/report/template.html  (inline modules: 0)
+OK  pwa/capture.html  (inline modules: 1)
+OK  pwa/case-capture.html  (inline modules: 1)
+OK  pwa/case-custody.html  (inline modules: 1)
+OK  pwa/case-detail.html  (inline modules: 1)
+OK  pwa/case-export.html  (inline modules: 1)
+OK  pwa/cases.html  (inline modules: 1)
+OK  pwa/custody.html  (inline modules: 1)
+OK  pwa/index.html  (inline modules: 1)
+OK  pwa/newcase.html  (inline modules: 1)
+OK  pwa/sign.html  (inline modules: 1)
+OK  pwa/templates.html  (inline modules: 1)
+scanned 12 HTML pages, 27 PWA JS modules, 11 CLI JS modules, 11 inline modules, 82 relative imports
+SYNTAX-AND-IMPORTS-OK
+-- attribution / four-layer watermark scan --
+layer 1 source headers : 53/53 identical
+layer 2 startup banner : 1 page(s) -> pwa/index.html
+layer 3 UI footer      : 12/12 pages
+layer 4 export artefacts: 4/4 markers
+ATTRIBUTION-4-LAYERS-OK
+-- dependency / remote / vendor-global audit --
+dependency manifests   : 0
+vendored modules       : 0
+external imports       : 0
+remote URLs in pages   : 0
+vendor-global readers  : 1 (illegal outside pwa/vendor: 0)
+fixed isolation notice : present verbatim
+export layer computes hashes : no
+attachments in checksum contract : yes
+AUDIT-OK

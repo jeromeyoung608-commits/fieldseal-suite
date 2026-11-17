@@ -1,0 +1,1088 @@
+{
+  "generatedAt": "2026-11-16T04:23:06.577Z",
+  "tool": "cli/bin/nine-oh.mjs",
+  "nineFiveTarget": 9.5,
+  "allDimsAtNineFive": false,
+  "weightedClaimed": 9.005,
+  "weightedVerified": 8.975,
+  "strictMode": false,
+  "counts": {
+    "DONE": 41,
+    "LOCAL-READY": 20,
+    "BLOCKED": 5
+  },
+  "dimensions": {
+    "AUDIT": {
+      "base": 7.5,
+      "weight": 0.15,
+      "achieved": 1.4500000000000002,
+      "achievedStrict": 1.4500000000000002,
+      "score": 8.95,
+      "scoreStrict": 8.95,
+      "atNineFive": false
+    },
+    "FUNC": {
+      "base": 8.5,
+      "weight": 0.25,
+      "achieved": 0.4,
+      "achievedStrict": 0.4,
+      "score": 8.9,
+      "scoreStrict": 8.9,
+      "atNineFive": false
+    },
+    "SEC": {
+      "base": 8.5,
+      "weight": 0.2,
+      "achieved": 0.5,
+      "achievedStrict": 0.5,
+      "score": 9,
+      "scoreStrict": 9,
+      "atNineFive": false
+    },
+    "UI": {
+      "base": 8.5,
+      "weight": 0.15,
+      "achieved": 0.5499999999999999,
+      "achievedStrict": 0.35,
+      "score": 9.05,
+      "scoreStrict": 8.85,
+      "atNineFive": false
+    },
+    "COMPLY": {
+      "base": 7.5,
+      "weight": 0.15,
+      "achieved": 1.5000000000000002,
+      "achievedStrict": 1.5000000000000002,
+      "score": 9,
+      "scoreStrict": 9,
+      "atNineFive": false
+    },
+    "DELIVER": {
+      "base": 8.5,
+      "weight": 0.1,
+      "achieved": 0.7999999999999999,
+      "achievedStrict": 0.7999999999999999,
+      "score": 9.3,
+      "scoreStrict": 9.3,
+      "atNineFive": false
+    }
+  },
+  "ledger": [
+    {
+      "id": "A1",
+      "dim": "AUDIT",
+      "weight": 0.4,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "auditAcceptance",
+      "evidence": {
+        "cmd": "node cli/bin/audit-acceptance.mjs",
+        "exitCode": 0,
+        "artifact": "cli/bin/audit-acceptance.mjs",
+        "sha256": "22708cb69df7a13d3e7523958de1236ebcbfc8b03f3f614cf18891c13d8ad6e3",
+        "timestamp": "2026-11-16T04:21:49.156Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "A2",
+      "dim": "AUDIT",
+      "weight": 0.3,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "keyDistribution",
+      "evidence": {
+        "cmd": "node cli/test/test-key-distribution.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/test-key-distribution.mjs",
+        "sha256": "93d32c0b5220a34dab417dad68c63a91712da13661f843af1cfbec34a0ceae13",
+        "timestamp": "2026-11-16T04:21:50.680Z"
+      },
+      "owner": "发布方",
+      "when": "1 周",
+      "acceptance": "导出 .pub → doctor 用该 .pub 验签；二维码未实现"
+    },
+    {
+      "id": "A3",
+      "dim": "AUDIT",
+      "weight": 0.3,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "auditAcceptance",
+      "evidence": {
+        "cmd": "node cli/bin/audit-acceptance.mjs",
+        "exitCode": 0,
+        "artifact": "cli/bin/audit-acceptance.mjs",
+        "sha256": "22708cb69df7a13d3e7523958de1236ebcbfc8b03f3f614cf18891c13d8ad6e3",
+        "timestamp": "2026-11-16T04:21:49.156Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "A4",
+      "dim": "AUDIT",
+      "weight": 0.2,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "auditAcceptance",
+      "evidence": {
+        "cmd": "node cli/bin/audit-acceptance.mjs",
+        "exitCode": 0,
+        "artifact": "cli/bin/audit-acceptance.mjs",
+        "sha256": "22708cb69df7a13d3e7523958de1236ebcbfc8b03f3f614cf18891c13d8ad6e3",
+        "timestamp": "2026-11-16T04:21:49.156Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "A5",
+      "dim": "AUDIT",
+      "weight": 0.2,
+      "status": "BLOCKED",
+      "strictStatus": "BLOCKED",
+      "check": null,
+      "evidence": null,
+      "owner": "独立审计员",
+      "when": "发布前 1 周",
+      "acceptance": "复核报告 sign-off + 问题闭环"
+    },
+    {
+      "id": "A6",
+      "dim": "AUDIT",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "auditRetention",
+      "evidence": {
+        "cmd": "node pwa/core/test-audit-retention.mjs",
+        "exitCode": 0,
+        "artifact": "pwa/core/test-audit-retention.mjs",
+        "sha256": "f207a7e94cdef5bac4e5d29fa4ea3eeb35edfed2052c0a2d4af025678a42534c",
+        "timestamp": "2026-11-16T04:21:50.743Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "A1.1",
+      "dim": "AUDIT",
+      "weight": 0.15,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "发布方",
+      "when": "1 周",
+      "acceptance": "DigiCert/Sectigo/FreeTSA 各成功 1 次；断网/错根/错 token 各拒绝"
+    },
+    {
+      "id": "A1.2",
+      "dim": "AUDIT",
+      "weight": 0.05,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "certChain",
+      "evidence": {
+        "cmd": "node cli/test/test-cert-chain.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/test-cert-chain.mjs",
+        "sha256": "b2915a1531e9967b9d275c95886d6785ef7bd9835cdc64274338f7ec801dfaae",
+        "timestamp": "2026-11-16T04:21:51.654Z"
+      },
+      "owner": "发布方",
+      "when": "1 周",
+      "acceptance": "错根/过期/错 policy 各 1 例拒绝"
+    },
+    {
+      "id": "A2.1",
+      "dim": "AUDIT",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "发布方",
+      "when": "1 周",
+      "acceptance": "轮换后旧导出仍可验；吊销后拒绝；UI 各点 1 次"
+    },
+    {
+      "id": "A3.1",
+      "dim": "AUDIT",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "negative25",
+      "evidence": {
+        "cmd": "node cli/test/test-negative-25.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/test-negative-25.mjs",
+        "sha256": "3c692eb0143d8da2ac303e950e2d062fc9f3f4288aef06c0dd84290fb7a0f134",
+        "timestamp": "2026-11-16T04:21:51.778Z"
+      },
+      "owner": "QA",
+      "when": "3 天",
+      "acceptance": "25/25，每例 case_id/expected/actual/artifact"
+    },
+    {
+      "id": "A7",
+      "dim": "AUDIT",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "发布方",
+      "when": "2 周",
+      "acceptance": "外部独立查询可验，proof 可复算"
+    },
+    {
+      "id": "F1",
+      "dim": "FUNC",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "uiCoreFlow",
+      "evidence": {
+        "cmd": "node cli/test/ui-core-flow.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/ui-core-flow.mjs",
+        "sha256": "1426ea343cc4e7c3ecdfac2a24fd0670c0b70eaf33d36c15f16f669bd11211cb",
+        "timestamp": "2026-11-16T04:22:02.065Z"
+      },
+      "owner": "QA",
+      "when": "2 天",
+      "acceptance": "ui-e2e.mjs 已做核心链路（建卷→封存→导出→CLI回验）；9 个 DOM 按钮点击+导出ZIP 待浏览器自动化"
+    },
+    {
+      "id": "F2",
+      "dim": "FUNC",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "QA",
+      "when": "2 天",
+      "acceptance": "ui-failure-matrix.mjs 已做核心路径失败注入；10 类浏览器失败待自动化"
+    },
+    {
+      "id": "F3",
+      "dim": "FUNC",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "scale",
+      "evidence": {
+        "cmd": "node pwa/core/test-large-evidence.mjs",
+        "exitCode": 0,
+        "artifact": "pwa/core/test-large-evidence.mjs",
+        "sha256": "c4de4c7ae1b61c3afde2dcbc5c8c4d7418e1b1dd4f4d884208c06ff3a78ce943",
+        "timestamp": "2026-11-16T04:22:02.741Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "F4",
+      "dim": "FUNC",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "platform",
+      "evidence": {
+        "cmd": "platform macOS supportdocs/PLATFORM-MATRIX.md",
+        "exitCode": 0,
+        "artifact": "docs/PLATFORM-MATRIX.md",
+        "sha256": "d3b70df9bbb6009675a6ed216bc6973835fe9414ae408c9b178a3e1ac2d79616",
+        "timestamp": "2026-11-16T04:22:02.743Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "F5",
+      "dim": "FUNC",
+      "weight": 0.05,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "determinism",
+      "evidence": {
+        "cmd": "node cli/test/test-determinism.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/test-determinism.mjs",
+        "sha256": "4220a1bcf902b377ad8b5828c658497e8a2d8aeb5296f860c72982b8368a209c",
+        "timestamp": "2026-11-16T04:22:02.794Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "F6",
+      "dim": "FUNC",
+      "weight": 0.05,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "QA",
+      "when": "2 天",
+      "acceptance": "13 类全部有自动化断言；当前浏览器检查仅覆盖子集"
+    },
+    {
+      "id": "F1.1",
+      "dim": "FUNC",
+      "weight": 0.05,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "uiCoreFlow",
+      "evidence": {
+        "cmd": "node cli/test/ui-core-flow.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/ui-core-flow.mjs",
+        "sha256": "1426ea343cc4e7c3ecdfac2a24fd0670c0b70eaf33d36c15f16f669bd11211cb",
+        "timestamp": "2026-11-16T04:22:02.065Z"
+      },
+      "owner": "QA",
+      "when": "2 天",
+      "acceptance": "9 按钮/SEALED/ZIP/CLI coreResult:ok/errors:[]"
+    },
+    {
+      "id": "F2.1",
+      "dim": "FUNC",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "QA",
+      "when": "2 天",
+      "acceptance": "10/10 每类不丢数据/不静默成功/有提示"
+    },
+    {
+      "id": "F3.1",
+      "dim": "FUNC",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "QA",
+      "when": "3 天",
+      "acceptance": "内存<512MB，构建/验证<30s，记录峰值"
+    },
+    {
+      "id": "F4.1",
+      "dim": "FUNC",
+      "weight": 0.15,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "发布方",
+      "when": "2 周",
+      "acceptance": "每平台日志+截图；macOS-only 则 9.5 不成立"
+    },
+    {
+      "id": "F8",
+      "dim": "FUNC",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "QA",
+      "when": "3 天",
+      "acceptance": "批量不崩；移动端可完成建卷/封存/导出"
+    },
+    {
+      "id": "S1",
+      "dim": "SEC",
+      "weight": 0.05,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "threatModel",
+      "evidence": {
+        "cmd": "contains docs/THREAT-MODEL.md",
+        "exitCode": 0,
+        "artifact": "docs/THREAT-MODEL.md",
+        "sha256": "16e26c5a37a805617783d7d5afc768de59cab5d96e423535d7cacf7e7c9d8c00",
+        "timestamp": "2026-11-16T04:22:02.795Z"
+      },
+      "owner": "安全",
+      "when": "1 周",
+      "acceptance": "威胁模型已存在；待 S1.1 扩充 STRIDE/LINDDUN/攻击树"
+    },
+    {
+      "id": "S2",
+      "dim": "SEC",
+      "weight": 0.15,
+      "status": "BLOCKED",
+      "strictStatus": "BLOCKED",
+      "check": null,
+      "evidence": null,
+      "owner": "第三方渗透",
+      "when": "2 周",
+      "acceptance": "第三方报告 + 复测"
+    },
+    {
+      "id": "S3",
+      "dim": "SEC",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "独立密码学评审",
+      "when": "发布前",
+      "acceptance": "签字版评审"
+    },
+    {
+      "id": "S4",
+      "dim": "SEC",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "repro",
+      "evidence": {
+        "cmd": "node tools/build/repro-build.mjs --self-test",
+        "exitCode": 0,
+        "artifact": "tools/build/repro-build.mjs",
+        "sha256": "0a5826ef36db4537c2f5a18c53fa99869842c4b891a0cbe00475c89781771194",
+        "timestamp": "2026-11-16T04:22:03.139Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "S5",
+      "dim": "SEC",
+      "weight": 0.05,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "发布方",
+      "when": "发布前",
+      "acceptance": "72h fuzz 日志（没跑完不许标 DONE）"
+    },
+    {
+      "id": "S6",
+      "dim": "SEC",
+      "weight": 0.05,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "zipSlip",
+      "evidence": {
+        "cmd": "node cli/test/test-zip-slip.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/test-zip-slip.mjs",
+        "sha256": "496ed6cbb77d7703abe3419ae23d16b284e1ac5528e0ce892a2bb648001e8e99",
+        "timestamp": "2026-11-16T04:22:03.217Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "S1.1",
+      "dim": "SEC",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "threatModel",
+      "evidence": {
+        "cmd": "contains docs/THREAT-MODEL.md",
+        "exitCode": 0,
+        "artifact": "docs/THREAT-MODEL.md",
+        "sha256": "16e26c5a37a805617783d7d5afc768de59cab5d96e423535d7cacf7e7c9d8c00",
+        "timestamp": "2026-11-16T04:22:02.795Z"
+      },
+      "owner": "安全",
+      "when": "1 周",
+      "acceptance": "每条威胁有缓解 + 测试用例"
+    },
+    {
+      "id": "S4.1",
+      "dim": "SEC",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "发布方",
+      "when": "2 周",
+      "acceptance": "两次构建 hash 一致 + 签名验证"
+    },
+    {
+      "id": "S7",
+      "dim": "SEC",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "发布方",
+      "when": "1 周",
+      "acceptance": "轮换后旧数据不可读；擦除可验证"
+    },
+    {
+      "id": "S8",
+      "dim": "SEC",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "antiForensics",
+      "evidence": {
+        "cmd": "audit-acceptance + audit-retention",
+        "exitCode": 0,
+        "artifact": "cli/bin/audit-acceptance.mjs",
+        "sha256": "22708cb69df7a13d3e7523958de1236ebcbfc8b03f3f614cf18891c13d8ad6e3",
+        "timestamp": "2026-11-16T04:22:06.110Z"
+      },
+      "owner": "发布方",
+      "when": "1 周",
+      "acceptance": "删除/回滚/重放各 1 例被拒"
+    },
+    {
+      "id": "S9",
+      "dim": "SEC",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "supplyChain",
+      "evidence": {
+        "cmd": "node cli/test/test-supply-chain.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/test-supply-chain.mjs",
+        "sha256": "ec0c59d6195a1bcd3c7afc279dd8e5fc7cf198b52fd4637cd546091dd3a2a9e5",
+        "timestamp": "2026-11-16T04:22:06.150Z"
+      },
+      "owner": "发布方",
+      "when": "持续",
+      "acceptance": "0 高危；有报告"
+    },
+    {
+      "id": "U1",
+      "dim": "UI",
+      "weight": 0.2,
+      "status": "BLOCKED",
+      "strictStatus": "BLOCKED",
+      "check": null,
+      "evidence": null,
+      "owner": "无障碍顾问",
+      "when": "1 天",
+      "acceptance": "读屏逐字稿 + VPAT 回填"
+    },
+    {
+      "id": "U2",
+      "dim": "UI",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "browser",
+      "evidence": {
+        "cmd": "node cli/test/ui-browser-check.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/ui-browser-check.mjs",
+        "sha256": "253581ec29e1efa82097f867be7b305345c42d4902dd562cb3d1902f39cb903e",
+        "timestamp": "2026-11-16T04:22:26.669Z"
+      },
+      "owner": "QA",
+      "when": "1 周",
+      "acceptance": "全流程 Tab 走查录像；当前仅结构探针 + 缩放/对比截图"
+    },
+    {
+      "id": "U3",
+      "dim": "UI",
+      "weight": 0.05,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "i18nCoverage",
+      "evidence": {
+        "cmd": "node cli/test/test-i18n-coverage.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/test-i18n-coverage.mjs",
+        "sha256": "7e8a69dcbbf76f8e95ef01ebdee3c142105a71a50155b7ca70784d2280b19046",
+        "timestamp": "2026-11-16T04:22:47.440Z"
+      },
+      "owner": "QA",
+      "when": "1 周",
+      "acceptance": "13 页全部可见文案 EN/DE 切换断言；当前仅 31 个 data-i18n key"
+    },
+    {
+      "id": "U4",
+      "dim": "UI",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "browser",
+      "evidence": {
+        "cmd": "node cli/test/ui-browser-check.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/ui-browser-check.mjs",
+        "sha256": "253581ec29e1efa82097f867be7b305345c42d4902dd562cb3d1902f39cb903e",
+        "timestamp": "2026-11-16T04:22:26.669Z"
+      },
+      "owner": "QA",
+      "when": "1 周",
+      "acceptance": "六类状态逐页自动化；当前仅 aria-live + 交互态"
+    },
+    {
+      "id": "U5",
+      "dim": "UI",
+      "weight": 0.05,
+      "status": "BLOCKED",
+      "strictStatus": "BLOCKED",
+      "check": null,
+      "evidence": null,
+      "owner": "发布方",
+      "when": "发布前",
+      "acceptance": "视觉 diff + 发布方签字"
+    },
+    {
+      "id": "U6",
+      "dim": "UI",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "i18nCoverage",
+      "evidence": {
+        "cmd": "node cli/test/test-i18n-coverage.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/test-i18n-coverage.mjs",
+        "sha256": "7e8a69dcbbf76f8e95ef01ebdee3c142105a71a50155b7ca70784d2280b19046",
+        "timestamp": "2026-11-16T04:22:47.440Z"
+      },
+      "owner": "QA",
+      "when": "1 周",
+      "acceptance": "13 页 EN/DE 截图 + 无漏翻"
+    },
+    {
+      "id": "U7",
+      "dim": "UI",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "uiCoreFlow",
+      "evidence": {
+        "cmd": "node cli/test/ui-core-flow.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/ui-core-flow.mjs",
+        "sha256": "1426ea343cc4e7c3ecdfac2a24fd0670c0b70eaf33d36c15f16f669bd11211cb",
+        "timestamp": "2026-11-16T04:22:02.065Z"
+      },
+      "owner": "QA",
+      "when": "1 周",
+      "acceptance": "建卷/封存/导出可完成"
+    },
+    {
+      "id": "U8",
+      "dim": "UI",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "无障碍顾问",
+      "when": "1 周",
+      "acceptance": "逐条回填 + 外部确认"
+    },
+    {
+      "id": "U9",
+      "dim": "UI",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "uiA11yFocus",
+      "evidence": {
+        "cmd": "node cli/test/ui-a11y-focus.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/ui-a11y-focus.mjs",
+        "sha256": "b393ca1aae379a48be65971188779282754480d00034fc2f863e69f1c9213985",
+        "timestamp": "2026-11-16T04:22:49.079Z"
+      },
+      "owner": "QA",
+      "when": "1 周",
+      "acceptance": "键盘走查 + 录像"
+    },
+    {
+      "id": "U10",
+      "dim": "UI",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "QA",
+      "when": "1 周",
+      "acceptance": "0 阻塞"
+    },
+    {
+      "id": "C1",
+      "dim": "COMPLY",
+      "weight": 0.3,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "dpa",
+      "evidence": {
+        "cmd": "contains pwa/legal/DPA-TEMPLATE.md",
+        "exitCode": 0,
+        "artifact": "pwa/legal/DPA-TEMPLATE.md",
+        "sha256": "f726e12688352166cef010027f592f91df5b8aefa4da43bdbd34d134414966ee",
+        "timestamp": "2026-11-16T04:22:49.080Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "C2",
+      "dim": "COMPLY",
+      "weight": 0.3,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "rights",
+      "evidence": {
+        "cmd": "node cli/bin/rights.mjs",
+        "exitCode": 0,
+        "artifact": "cli/bin/rights.mjs",
+        "sha256": "13b05be39f8609fbd6cb777bd5edf78377962dc47e2c4a1da61694be7b7db5eb",
+        "timestamp": "2026-11-16T04:22:49.123Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "C3",
+      "dim": "COMPLY",
+      "weight": 0.2,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "ropa",
+      "evidence": {
+        "cmd": "contains docs/ROPA-DPIA.md",
+        "exitCode": 0,
+        "artifact": "docs/ROPA-DPIA.md",
+        "sha256": "41675ac34be28fb6dc931a6c43a8a37578af6465e78853ed9670a4d2c03968de",
+        "timestamp": "2026-11-16T04:22:49.124Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "C4",
+      "dim": "COMPLY",
+      "weight": 0.3,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "vpat",
+      "evidence": {
+        "cmd": "vpat per-row >=15",
+        "exitCode": 0,
+        "artifact": "pwa/legal/VPAT-2.5-EU.md",
+        "sha256": "9729e224d71492473a78f70cc63a97577ca3c0a9f4b095b3fd2a22e5c567df74",
+        "timestamp": "2026-11-16T04:22:49.124Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "C5",
+      "dim": "COMPLY",
+      "weight": 0.2,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "backupRto10k",
+      "evidence": {
+        "cmd": "node cli/bin/backup.mjs export|verify|restore (N=10000, rtoMs=56)",
+        "exitCode": 0,
+        "artifact": "cli/bin/backup.mjs",
+        "sha256": "56e671ee2f96c1cf236047f02f2f8760016b7ef759a3af7ce456ee4cdb0f5a7a",
+        "timestamp": "2026-11-16T04:22:49.330Z"
+      },
+      "owner": "运维",
+      "when": "1 天",
+      "acceptance": "RTO/RPO 演练记录"
+    },
+    {
+      "id": "C6",
+      "dim": "COMPLY",
+      "weight": 0.2,
+      "status": "BLOCKED",
+      "strictStatus": "BLOCKED",
+      "check": null,
+      "evidence": null,
+      "owner": "法务",
+      "when": "发布前",
+      "acceptance": "法务签字"
+    },
+    {
+      "id": "C4.1",
+      "dim": "COMPLY",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "无障碍顾问",
+      "when": "1 周",
+      "acceptance": "外部确认（非只放文档）"
+    },
+    {
+      "id": "C7",
+      "dim": "COMPLY",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "applicability",
+      "evidence": {
+        "cmd": "contains docs/APPLICABILITY-ASSESSMENT.md",
+        "exitCode": 0,
+        "artifact": "docs/APPLICABILITY-ASSESSMENT.md",
+        "sha256": "c4e8d7d1ef7213bd071cba6d9823f6e6faa5804df9309510c3fd698a7608b858",
+        "timestamp": "2026-11-16T04:22:49.331Z"
+      },
+      "owner": "法务",
+      "when": "2 周",
+      "acceptance": "适用性评估 + 条款/证据"
+    },
+    {
+      "id": "C8",
+      "dim": "COMPLY",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "法务",
+      "when": "4 周",
+      "acceptance": "证书或等价审计"
+    },
+    {
+      "id": "C9",
+      "dim": "COMPLY",
+      "weight": 0.1,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "法务",
+      "when": "2 周",
+      "acceptance": "可签 + 清单 + 证明"
+    },
+    {
+      "id": "C10",
+      "dim": "COMPLY",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "privacyNotice",
+      "evidence": {
+        "cmd": "contains docs/privacy-notice.md",
+        "exitCode": 0,
+        "artifact": "docs/privacy-notice.md",
+        "sha256": "d98c723883626c1a4093645144e167a624a3e53d7d47499eb7a811cd4ce9a0a1",
+        "timestamp": "2026-11-16T04:22:49.332Z"
+      },
+      "owner": "法务",
+      "when": "2 周",
+      "acceptance": "声明 + 管理 + 说明"
+    },
+    {
+      "id": "D1",
+      "dim": "DELIVER",
+      "weight": 0.15,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "repro",
+      "evidence": {
+        "cmd": "node tools/build/repro-build.mjs --self-test",
+        "exitCode": 0,
+        "artifact": "tools/build/repro-build.mjs",
+        "sha256": "0a5826ef36db4537c2f5a18c53fa99869842c4b891a0cbe00475c89781771194",
+        "timestamp": "2026-11-16T04:22:03.139Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "D2",
+      "dim": "DELIVER",
+      "weight": 0.15,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "发布方",
+      "when": "2 周",
+      "acceptance": "每平台日志"
+    },
+    {
+      "id": "D3",
+      "dim": "DELIVER",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "backupDemo",
+      "evidence": {
+        "cmd": "node cli/bin/backup.mjs export|verify|restore (N=200, rtoMs=45)",
+        "exitCode": 0,
+        "artifact": "cli/bin/backup.mjs",
+        "sha256": "56e671ee2f96c1cf236047f02f2f8760016b7ef759a3af7ce456ee4cdb0f5a7a",
+        "timestamp": "2026-11-16T04:22:49.474Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "D4",
+      "dim": "DELIVER",
+      "weight": 0.05,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": null,
+      "evidence": null,
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "D5",
+      "dim": "DELIVER",
+      "weight": 0.05,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "runbook",
+      "evidence": {
+        "cmd": "runbook exists",
+        "exitCode": 0,
+        "artifact": "docs/runbook.md",
+        "sha256": "f012c9b8c7312647f925d31323c190cc614c4674063ea0fe88aeefe9ce9d3f6b",
+        "timestamp": "2026-11-16T04:22:49.474Z"
+      },
+      "owner": null,
+      "when": null
+    },
+    {
+      "id": "D6",
+      "dim": "DELIVER",
+      "weight": 0.05,
+      "status": "LOCAL-READY",
+      "strictStatus": "LOCAL-READY",
+      "check": null,
+      "evidence": null,
+      "owner": "发布方",
+      "when": "发布前",
+      "acceptance": "从零到发布录屏"
+    },
+    {
+      "id": "D7",
+      "dim": "DELIVER",
+      "weight": 0.05,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "releaseNotes",
+      "evidence": {
+        "cmd": "contains docs/RELEASE-NOTES.md",
+        "exitCode": 0,
+        "artifact": "docs/RELEASE-NOTES.md",
+        "sha256": "593432386b50fa5392fbaeeed95db066e6ac3f554e71beb713cd4cc7a32fa9fb",
+        "timestamp": "2026-11-16T04:22:49.475Z"
+      },
+      "owner": "发布方",
+      "when": "发布前",
+      "acceptance": "版本说明+迁移+已知问题"
+    },
+    {
+      "id": "D8",
+      "dim": "DELIVER",
+      "weight": 0.05,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "supportSla",
+      "evidence": {
+        "cmd": "contains pwa/legal/SUPPORT-SLA.md",
+        "exitCode": 0,
+        "artifact": "pwa/legal/SUPPORT-SLA.md",
+        "sha256": "8934347ee220d814d226f2d5d3a6f5705dfa4e1c1189de3ca9a8c49844d92676",
+        "timestamp": "2026-11-16T04:22:49.476Z"
+      },
+      "owner": "运维",
+      "when": "发布前",
+      "acceptance": "支持渠道 + 分级"
+    },
+    {
+      "id": "D9",
+      "dim": "DELIVER",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "repro",
+      "evidence": {
+        "cmd": "node tools/build/repro-build.mjs --self-test",
+        "exitCode": 0,
+        "artifact": "tools/build/repro-build.mjs",
+        "sha256": "0a5826ef36db4537c2f5a18c53fa99869842c4b891a0cbe00475c89781771194",
+        "timestamp": "2026-11-16T04:22:03.139Z"
+      },
+      "owner": "发布方",
+      "when": "2 周",
+      "acceptance": "两次构建 hash 一致 + SBOM + 签名"
+    },
+    {
+      "id": "D10",
+      "dim": "DELIVER",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "backupRto10k",
+      "evidence": {
+        "cmd": "node cli/bin/backup.mjs export|verify|restore (N=10000, rtoMs=56)",
+        "exitCode": 0,
+        "artifact": "cli/bin/backup.mjs",
+        "sha256": "56e671ee2f96c1cf236047f02f2f8760016b7ef759a3af7ce456ee4cdb0f5a7a",
+        "timestamp": "2026-11-16T04:22:49.330Z"
+      },
+      "owner": "运维",
+      "when": "1 周",
+      "acceptance": "RTO 达标 + 恢复后校验"
+    },
+    {
+      "id": "D11",
+      "dim": "DELIVER",
+      "weight": 0.1,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "releaseRollback",
+      "evidence": {
+        "cmd": "node tools/release/test-release-tool.mjs",
+        "exitCode": 0,
+        "artifact": "tools/release/test-release-tool.mjs",
+        "sha256": "84cdf129f8074bf8b8365f8133433b84002e92effd60953fbdd5985adca8fbad",
+        "timestamp": "2026-11-16T04:22:49.539Z"
+      },
+      "owner": "发布方",
+      "when": "2 周",
+      "acceptance": "回滚后数据/配置一致"
+    },
+    {
+      "id": "D12",
+      "dim": "DELIVER",
+      "weight": 0.05,
+      "status": "DONE",
+      "strictStatus": "DONE",
+      "check": "noTelemetry",
+      "evidence": {
+        "cmd": "node cli/test/test-no-telemetry.mjs",
+        "exitCode": 0,
+        "artifact": "cli/test/test-no-telemetry.mjs",
+        "sha256": "5ddb1db5d06742d177b3f60eac3d15c61bafbffb899a9afd7f362a6335c4f336",
+        "timestamp": "2026-11-16T04:22:53.751Z"
+      },
+      "owner": "发布方",
+      "when": "1 周",
+      "acceptance": "抓包 0 外联"
+    }
+  ],
+  "localFailures": 1
+}

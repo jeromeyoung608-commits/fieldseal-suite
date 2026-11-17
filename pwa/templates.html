@@ -1,0 +1,160 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Templates - FieldSeal Suite</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+</head>
+<body>
+<div class="wrap">
+ <div class="topbar">
+ <div class="brand">
+ <img src="./assets/icon.svg" alt="FieldSeal">
+ <div>
+ <h1>Templates</h1>
+ <p><span>Templates</span> · <a href="./cases.html">Cases</a></p>
+ </div>
+ </div>
+ <span class="net-state" id="net-state">Offline-ready</span>
+ <span id="lang-switch" class="lang-switch-host"></span>
+ </div>
+
+ <a class="back-link" href="./cases.html">&larr; Case list</a>
+
+ <div class="card">
+ <h2>Base templates</h2>
+ <p class="hint">NIST / OSAC-calibrated, read-only. Fields are global (case-wide) or item (per capture). / NIST / OSAC ,.()()</p>
+ <div id="builtin-list"></div>
+ </div>
+
+ <div class="card">
+ <div class="row" style="justify-content:space-between">
+ <h2 style="margin:0">Own templates</h2>
+ <button class="btn btn-ghost" id="refresh-btn" data-i18n="action.refresh">Refresh</button>
+ </div>
+ <p class="hint">Stored locally (localStorage). Field editing follows in Phase 3. / localStorage; 3</p>
+ <ul class="case-list" id="custom-list"></ul>
+ </div>
+
+ <footer>
+ <p data-lang="en"><strong>EN</strong> Templates define schema only. Actual captures and values live in each case. Built-in templates cannot be deleted.</p>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</div>
+
+<script type="module">
+ import './core/i18n.js';
+ import { META_TEMPLATES } from './core/case-manifest.js';
+ import { uuidV4 } from './core/hash.js';
+ import { el, showToast, confirmDialog, registerServiceWorker, setOfflineIndicator } from './ui/components.js';
+
+ const $ = (id) => document.getElementById(id);
+ const CUSTOM_KEY = 'fieldseal-custom-templates';
+
+ registerServiceWorker();
+ setOfflineIndicator();
+
+ function fieldPill(f) {
+ const kids = [el('strong', { text: f.label }), el('span', { class: 'ft', text: f.type })];
+ if (f.required) kids.push(el('span', { class: 'fr', text: 'required' }));
+ const pill = el('span', { class: 'field-pill' + (f.required ? ' required' : '') }, kids);
+ if (Array.isArray(f.options) && f.options.length) {
+ pill.appendChild(el('span', { class: 'fo', text: f.options.join('') }));
+ }
+ return pill;
+ }
+
+ function templateCard(key, tpl) {
+ const fields = tpl.globalFields.concat(tpl.itemFields);
+ return el('div', { class: 'card', style: 'background:var(--surface-2);margin:14px 0 0' }, [
+ el('div', { class: 'row', style: 'justify-content:space-between' }, [
+ el('h3', { text: tpl.label + ' (' + key + ')' }),
+ el('button', {
+ class: 'btn', text: 'Save as own template',
+ onclick: () => saveCustom(key, tpl)
+ })
+ ]),
+ fields.length
+ ? el('div', { class: 'field-list' }, fields.map(fieldPill))
+ : el('div', { class: 'section-empty', text: 'No fields' })
+ ]);
+ }
+
+ function saveCustom(key, tpl) {
+ const customs = loadCustom();
+ const copy = {
+ id: uuidV4(),
+ label: tpl.label + ' (copy)',
+ globalFields: JSON.parse(JSON.stringify(tpl.globalFields)),
+ itemFields: JSON.parse(JSON.stringify(tpl.itemFields))
+ };
+ customs.push(copy);
+ localStorage.setItem(CUSTOM_KEY, JSON.stringify(customs));
+ showToast('Saved as your own template', 'ok');
+ renderCustom();
+ }
+
+ function loadCustom() {
+ try { return JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]'); } catch { return []; }
+ }
+
+ function renderBuiltin() {
+ const host = $('builtin-list');
+ host.textContent = '';
+ for (const [key, tpl] of Object.entries(META_TEMPLATES)) {
+ if (key === 'custom') continue;
+ host.appendChild(templateCard(key, tpl));
+ }
+ }
+
+ function renderCustom() {
+ const list = $('custom-list');
+ list.textContent = '';
+ const customs = loadCustom();
+ if (!customs.length) {
+ list.appendChild(el('li', { class: 'section-empty', text: 'No custom templates yet. Copy a base template.' }));
+ return 0;
+ }
+ for (const ct of customs) {
+ const fields = ct.globalFields.concat(ct.itemFields);
+ list.appendChild(el('li', { class: 'case-row' }, [
+ el('div', { class: 'case-main' }, [
+ el('div', { class: 'case-title', text: ct.label }),
+ el('div', { class: 'case-sub', text: fields.length + ' fields · ' + ct.id.slice(0, 8) })
+ ]),
+ el('div', { class: 'case-actions' }, [
+ el('button', {
+ class: 'btn btn-ghost btn-danger', text: 'Delete',
+ onclick: async () => {
+ if (await confirmDialog('Delete this custom template?')) {
+ localStorage.setItem(CUSTOM_KEY, JSON.stringify(loadCustom().filter((t) => t.id !== ct.id)));
+ showToast('Deleted', 'ok');
+ renderCustom();
+ }
+ }
+ })
+ ])
+ ]));
+ }
+ return customs.length;
+ }
+
+ $('refresh-btn').addEventListener('click', () => { // Delivery audit D4: refreshing an unchanged list must still give feedback.
+ const count = renderCustom();
+ showToast('Refreshed · ' + count + ' templates', 'ok');
+ }); // Audit D5: keep dynamically rendered lists in sync with the active language.
+ document.addEventListener('fieldseal:langchange', () => { renderCustom(); });
+ renderBuiltin();
+ renderCustom();
+</script>
+</body>
+</html>

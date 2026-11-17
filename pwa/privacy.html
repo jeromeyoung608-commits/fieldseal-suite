@@ -1,0 +1,121 @@
+<!doctype html>
+<!--
+ * FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ * License: MIT
+ * Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Privacy &amp; Legal — FieldSeal Suite</title>
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+</head>
+<body>
+<header class="topbar">
+ <a class="brand" href="./index.html">FieldSeal Suite</a>
+ <span class="topbar-sub">Privacy · DPA · SLA · Accessibility</span>
+ <span id="lang-switch"></span>
+</header>
+<main class="container" id="main-content" tabindex="-1">
+ <h1>Privacy &amp; Legal</h1>
+ <p class="notice">Version 1.0 · 2026-11-14 · Applies to the offline, self-hosted FieldSeal Suite.</p>
+
+ <div class="card">
+ <h2>1. Plain-language summary</h2>
+ <p data-lang="en" lang="en"><strong>English.</strong> FieldSeal Suite runs entirely on your device. It has no backend, no account, no telemetry, no analytics SDK, no cookies and no outbound network calls. Evidence, cases, signatures and the local operation trail stay in your browser profile or in files you export yourself. The publisher never receives your data. You are the controller of any personal data you choose to enter; the publisher is not a processor because it has no access.</p>
+ </div>
+
+ <div class="card">
+ <h2>2. What is stored, where, and for how long</h2>
+ <table>
+ <thead><tr><th>Data</th><th>Location</th><th>Retention</th></tr></thead>
+ <tbody>
+ <tr><td>Evidence packages, cases, signature images</td><td>Browser IndexedDB (<code>fieldseal-cases</code>) and files you export</td><td>Until you delete them; no automatic upload</td></tr>
+ <tr><td>Operator identity profiles, human notes</td><td>Browser localStorage / case manifest</td><td>Until you delete them; included in GDPR erasure</td></tr>
+ <tr><td>Local operation trail (actor, action, target, authorisation, source)</td><td>Browser localStorage (<code>fieldseal-local-audit-log</code>)</td><td>365 days by default, configurable; hourly sweep</td></tr>
+ <tr><td>Language preference, UI flags</td><td>Browser localStorage</td><td>Until cleared by the browser user</td></tr>
+ </tbody>
+ </table>
+ <p>No IP address is recorded. Browsers cannot expose a reliable client IP to a static page, so the trail records origin, user-agent and platform instead. Timezone and tool version are dropped when GDPR redaction is enabled.</p>
+ </div>
+
+ <div class="card">
+ <h2>2b. Processing activities register (ROPA / GDPR Art. 30)</h2>
+ <table>
+ <thead><tr><th>Purpose</th><th>Categories of data</th><th>Legal basis</th><th>Retention</th><th>Recipients</th></tr></thead>
+ <tbody>
+ <tr>
+ <td>Local capture, sealing, verification and export of evidence; multi-party signing canvases; local operation trail</td>
+ <td>Names, handwritten signature images, human notes, optional geolocation/timezone, trail metadata (actor, action, target, authorisation, source)</td>
+ <td>Legitimate interest and/or explicit consent, decided by the operator as controller</td>
+ <td>Until deletion by the operator; trail 365 days by default (configurable, hourly sweep)</td>
+ <td>Only the operator; no third party, no sub-processor, no transfer</td>
+ </tr>
+ </tbody>
+ </table>
+ <p>This table is part of the printable privacy record (use <em>Print / Save as PDF</em> above). It is a self-declaration for an offline, single-operator deployment; the publisher is not a processor and holds no copy of the data.</p>
+ </div>
+
+ <div class="card">
+ <h2>3. Your rights (GDPR Art. 15–22)</h2>
+ <p>Access, rectification, erasure, restriction, portability and objection are exercised <strong>locally by you</strong>, because no external controller holds a copy:</p>
+ <ul>
+ <li><strong>Access / portability:</strong> open <a href="./backup.html">Backup &amp; restore</a> and export all cases plus the JSON/TXT operation trail.</li>
+ <li><strong>Erasure:</strong> delete a case from Case Management; the linked operation-trail entries are removed and surviving actor references are redacted automatically. Clearing browser site data removes everything else.</li>
+ <li><strong>Rectification / restriction:</strong> edit draft cases directly; sealed cases are intentionally immutable, so rectification means creating a corrected new case and deleting the old one.</li>
+ </ul>
+ <p><strong>Rectification, restriction and objection (GDPR Art. 16 / 18 / 21).</strong>
+ Draft cases can be edited in place. Sealed cases are intentionally immutable, so rectification
+ means creating a corrected new case and deleting the old one; restriction is applied by keeping
+ the original sealed and adding a linked note; objection to a processing purpose is exercised by
+ not entering the relevant data and deleting the case.</p>
+ <p>You may also send a written request using the template below. The publisher has no access to your
+ data and is therefore not a recipient of such requests; the template is provided for your own
+ records. We aim to respond within <strong>one month</strong> (extendable by two months for complex
+ requests, with reasons given).</p>
+ <pre class="muted">Subject: Data-protection request — [Access / Rectification / Erasure / Restriction / Portability / Objection]
+From: [your name / role]
+Case reference(s): [if known]
+Requested action: [describe]
+Date: [YYYY-MM-DD]</pre>
+ <p>See <a href="./legal/DATA-RESIDENCY.md">Data residency &amp; subprocessors</a> for the full statement.</p>
+ </div>
+
+ <div class="card">
+ <h2>4. Documents available without contacting us</h2>
+ <ul>
+ <li><a href="./legal/DPA-TEMPLATE.md" download>Data Processing Agreement (template, signable)</a></li>
+ <li><a href="./legal/SUPPORT-SLA.md" download>Support SLA &amp; response times</a></li>
+ <li><a href="./legal/VPAT-2.5-EU.md" download>VPAT 2.5 EU / Accessibility Conformance Report</a></li>
+ <li><a href="./legal/DATA-RESIDENCY.md" download>Data residency &amp; subprocessor statement</a></li>
+ <li><a href="../SECURITY.md">Security policy &amp; threat model</a></li>
+ <li><a href="../KNOWN_ISSUES.md">Known issues &amp; limitations</a></li>
+ </ul>
+ <p><button class="btn" id="print-pdf" type="button">Print / Save as PDF / PDF</button></p>
+ <p class="muted">Printing uses the browser's built-in PDF engine. No third-party PDF library, no network.</p>
+ </div>
+
+ <div class="card">
+ <h2>5. Legal disclaimers</h2>
+ <p data-lang="en" lang="en">This software produces authenticity and chain-of-custody artefacts. It does <strong>not</strong> provide an eIDAS qualified electronic signature, does not make legal determinations, and does not guarantee admissibility in any court. Admissibility depends on local law, procedure and the operator's own testimony.</p>
+ </div>
+
+ <footer>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</main>
+<script type="module">
+ import './core/i18n.js';
+ import { showToast } from './ui/components.js';
+ const btn = document.getElementById('print-pdf');
+ if (btn) btn.addEventListener('click', () => {
+ showToast('Opening print dialog', 'ok');
+ setTimeout(() => { try { window.print(); } catch (e) { /* ignore */ } }, 150);
+ });
+</script>
+</body>
+</html>

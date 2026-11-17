@@ -1,0 +1,840 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SignCanvas - FieldSeal Suite</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+</head>
+<body>
+<div class="wrap">
+ <div class="topbar">
+ <div class="brand">
+ <img src="./assets/icon.svg" alt="FieldSeal">
+ <div>
+ <h1 data-i18n="page.sign.title">SignCanvas</h1>
+ <p><span>Multi-party signing</span> · <a href="./index.html">Start</a></p>
+ </div>
+ </div>
+ <span class="net-state" id="net-state">Offline-ready</span>
+ <span id="lang-switch" class="lang-switch-host"></span>
+ </div>
+
+ <div class="status-line" style="font-size:15px">
+ <span class="status-badge" id="mode-badge" data-step="draft"></span>
+ <strong id="mode-label">DRAFT MODE</strong>
+ <span class="mono" id="status-text">Draft - editable</span>
+ </div>
+
+ <section class="card">
+ <h2>1. Import evidence package</h2>
+ <p class="hint">The package is checked locally for schema, root hash and file hashes. Nothing is uploaded. / schema</p>
+ <div class="row">
+ <input type="file" id="evidence-input" accept=".zip" aria-label="Evidence package ZIP / ZIP" style="flex:1 1 260px">
+ <button class="btn" id="import-btn">Verify</button>
+ </div>
+ <div id="evidence-result" style="margin-top:12px"></div>
+ </section>
+
+ <section class="card" id="mode-select-card" hidden>
+ <h2>1b. Signing mode</h2>
+ <div class="radio-group" style="margin-bottom:8px">
+ <label class="mode-option" style="display:flex;gap:10px;align-items:flex-start;margin:8px 0">
+ <input type="radio" name="sign-mode" id="mode-joint" value="joint" checked>
+ <span><strong>Joint signing</strong> — One shared confirmation record<br>
+ <small>Suitable for joint inspection, group acceptance. All signatures are sealed together in one record.</small></span>
+ </label>
+ <label class="mode-option" style="display:flex;gap:10px;align-items:flex-start;margin:8px 0">
+ <input type="radio" name="sign-mode" id="mode-independent" value="independent">
+ <span><strong>Independent signing</strong> — I create my own separate proof<br>
+ <small>Suitable for contracts, adjusters, witnesses.<br>
+ &#9888;&#65039; This does NOT enforce an approval sequence or workflow. You coordinate signing order externally.</small></span>
+ </label>
+ </div>
+ </section>
+
+ <section class="card">
+ <h2>1c. Verify supplement</h2>
+ <p class="hint">Supplement packages are additional documents. They do not change the evidence package hash. / supplement.zip</p>
+ <div class="row">
+ <input type="file" id="supplement-input" accept=".zip" aria-label="Supplement package ZIP / ZIP" style="flex:1 1 260px">
+ <button class="btn" id="supplement-btn">Verify</button>
+ </div>
+ <div id="supplement-result" style="margin-top:12px"></div>
+ </section>
+
+ <section class="card">
+ <h2>2. Signatures</h2>
+ <p class="hint">All parties draw on the same sheet. After Seal the canvas is locked.</p>
+ <div class="row" style="margin-bottom:12px">
+ <label class="field" style="margin:0;min-width:120px"><span>Colour</span><input type="color" id="stroke-color" value="#111318" style="padding:4px;height:40px"></label>
+ <label class="field" style="margin:0;min-width:130px"><span>Width</span><input type="number" id="stroke-width" value="2.6" min="1" max="12" step="0.2"></label>
+ <button class="btn btn-ghost" id="undo-btn">Undo</button>
+ <button class="btn btn-ghost btn-danger" id="clear-btn">Clear</button>
+ <span class="mono" id="stroke-count">0 strokes</span>
+ </div>
+ <canvas id="sign-canvas" style="width:100%;height:240px;border-radius:10px;touch-action:none;display:block;background:#fff"></canvas>
+ </section>
+
+ <section class="card">
+ <h2 id="parties-title">3. Parties and note</h2>
+ <div id="joint-parties">
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px">
+ <label class="field"><span>Name</span><input type="text" id="party-name" placeholder="e.g. Client"></label>
+ <label class="field"><span>Role</span>
+ <select id="party-role">
+ <option value="Signatory">Signatory</option>
+ <option value="Witness">Witness</option>
+ <option value="Owner">Owner</option>
+ <option value="Contractor">Contractor</option>
+ <option value="Adjuster">Adjuster</option>
+ <option value="Other">Other</option>
+ </select>
+ </label>
+ <label class="field"><span>Organisation</span><input type="text" id="party-org" placeholder="Example Ltd"></label>
+ <label class="field"><span>Ref</span><input type="text" id="party-ref" placeholder="GS-2026-0042"></label>
+ <label class="field"><span>Licence</span><input type="text" id="party-license" placeholder="FG-2026-0042"></label>
+ <label class="field"><span>Timezone</span><input type="text" id="party-tz" class="mono" placeholder="Europe/London"></label>
+ </div>
+ <label class="field" style="margin-top:10px"><span>Reservation</span>
+ <input type="text" id="party-reservation" placeholder="e.g. subject to verification">
+ </label>
+ <div class="row" style="margin-top:10px">
+ <button class="btn" id="party-add">Add</button>
+ </div>
+ <div id="party-list" style="margin-top:12px"></div>
+ </div>
+ <div id="independent-party" hidden>
+ <label class="field"><span>Current signer</span>
+ <input type="text" id="current-signer" placeholder="Your name" style="flex:1 1 220px">
+ </label>
+ <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:10px;margin-top:10px">
+ <label class="field"><span>Role</span>
+ <select id="ind-role">
+ <option value="">(none</option>
+ <option value="Signatory">Signatory</option>
+ <option value="Witness">Witness</option>
+ <option value="Owner">Owner</option>
+ <option value="Contractor">Contractor</option>
+ <option value="Adjuster">Adjuster</option>
+ <option value="Other">Other</option>
+ </select>
+ </label>
+ <label class="field"><span>Organisation</span><input type="text" id="ind-org" placeholder="Example Ltd"></label>
+ <label class="field"><span>Ref</span><input type="text" id="ind-ref" placeholder="GS-2026-0042"></label>
+ <label class="field"><span>Licence</span><input type="text" id="ind-license" placeholder="FG-2026-0042"></label>
+ <label class="field"><span>Reservation</span><input type="text" id="ind-reservation" placeholder="e.g. subject to verification"></label>
+ </div>
+ <p class="hint">Independent single signature: create your own signature-record.zip. No approval workflow.</p>
+ </div>
+ <label class="field" style="margin-top:16px"><span>Signing timezone / manifest.tzIana</span>
+ <input type="text" id="seal-tz" class="mono" placeholder="Europe/London">
+ </label>
+ <label class="field" style="margin-top:16px"><span>sealNote</span><textarea id="seal-note" placeholder=""></textarea></label>
+ </section>
+
+ <section class="card" id="sync-card">
+ <h2>4. Synchronization</h2>
+ <div class="radio-group" style="margin-bottom:14px">
+ <label><input type="radio" name="sync-mode" id="mode-offline" checked>Offline fallback</label>
+ <label><input type="radio" name="sync-mode" id="mode-p2p">WebRTC P2P</label>
+ </div>
+
+ <div id="offline-block">
+ <p class="hint">Each party can sign the same draft locally or hand over a draft file manually. The file is an auxiliary artefact and is <strong>not</strong>included in the signed package.</p>
+ <div class="row">
+ <button class="btn" id="export-draft">Export draft</button>
+ <button class="btn" id="import-draft">Import draft</button>
+ <input type="file" id="draft-input" accept=".json,application/json" hidden>
+ </div>
+ </div>
+
+ <div id="p2p-block" hidden>
+ <p class="hint">Manual signalling: copy invitation / reply by hand. No signalling server, no external STUN / TURN services. Active only in DRAFT MODE. / STUN. Concurrent editing triggers a conflict warning without automatic merging.</p>
+ <div class="row">
+ <button class="btn" id="offer-btn">Create invitation</button>
+ <button class="btn" id="answer-btn">Create reply from invitation</button>
+ <button class="btn" id="apply-answer-btn">Apply answer</button>
+ <button class="btn btn-ghost" id="sync-state-btn">Send state</button>
+ </div>
+ <label class="field" style="margin-top:12px"><span>Invitation / Response (JSON)</span><textarea id="p2p-text" style="min-height:100px" placeholder="Paste JSON here"></textarea></label>
+ <span class="mono" id="p2p-state">Not connected</span>
+ </div>
+ </section>
+
+ <section class="card">
+ <h2>5. Seal and export</h2>
+ <div class="notice">Seal is a high-risk action: afterwards the canvas, parties and note are permanently locked. Changes require a new package with a new packageId. / packageId</div>
+ <div class="row">
+ <button class="btn btn-primary" id="seal-btn" disabled>SEAL - lock irrevocably</button>
+ <button class="btn" id="export-btn" disabled>Download signature-record.zip</button>
+ <button class="btn" id="export-manifest-btn" disabled>Download manifest.json</button>
+ </div>
+ <div class="result" id="result">
+ <div class="notice" style="margin-top:16px">Verify with CLI<br><span class="mono">node cli/bin/audit.js verify ./signature-record.zip --linked ./evidence.zip --json</span></div>
+ <p><strong>packageId</strong><br><span class="mono" id="result-package-id"></span></p>
+ <p><strong>rootHash</strong><br><span class="mono" id="result-root-hash"></span></p>
+ <p><strong>linkedEvidenceRootHash</strong><br><span class="mono" id="result-linked-hash"></span></p>
+ <p><strong>canvasSnapshotHash</strong><br><span class="mono" id="result-snapshot-hash"></span></p>
+ <p><strong>Scope</strong><br><span class="mono" id="result-size"></span></p>
+ <details><summary>Show manifest.json</summary><pre id="manifest-preview"></pre></details>
+ <div class="notice" style="margin-top:16px" id="legal-note" hidden>This package provides tamper-evident cryptographic proof. It is not legal advice and does not replace formal contract systems.</div>
+ </div>
+ </section>
+
+ <section class="card">
+ <h2>6. Recipient audit trail</h2>
+ <p class="hint">Disabled by default. Writes <strong>no</strong> manifest and does <strong>not</strong> enter the root hash.</p>
+ <div class="notice" id="log-warning">This is recipient-side local operation trail, NOT cryptographically sealed with the original evidence.</div>
+ <div class="row" style="margin-top:10px">
+ <label class="field" style="margin:0;min-width:260px"><span>Enable local audit trail</span>
+ <input type="checkbox" id="log-toggle">
+ </label>
+ <button class="btn" id="export-log-json">Export log JSON</button>
+ <button class="btn" id="export-log-txt">Export log TXT</button>
+ <span class="log-verify">
+ <button class="btn btn-ghost" id="verify-log-btn">Verify signed log</button>
+ <input type="file" id="verify-log-file" accept="application/json" aria-label="Choose signed audit-log file">
+ </span>
+ </div>
+ <details class="row" style="margin-top:8px">
+ <summary>TSA / RFC3161</summary>
+ <p class="hint">External RFC3161 timestamping (EP-001 contract).</p>
+ <label class="field"><span>Mode</span>
+ <select id="tsa-mode">
+ <option value="local">TSA (local device)</option>
+ <option value="external">RFC3161 (external)</option>
+ <option value="off">Off</option>
+ </select>
+ </label>
+ <label class="field" style="flex:1 1 320px"><span>TSA Endpoint</span>
+ <input type="text" id="tsa-endpoint" placeholder="RFC3161 endpoint URL" style="width:100%">
+ </label>
+ <label class="field" style="flex:1 1 320px"><span>TSA SPKI</span>
+ <input type="text" id="tsa-root" placeholder="base64 SPKI" style="width:100%">
+ </label>
+ <button class="btn btn-ghost" id="tsa-save" type="button">Save</button>
+ <span id="tsa-stat" class="hint"></span>
+ </details>
+ <div class="row" style="margin-top:8px">
+ <button class="btn btn-ghost" id="export-device-key" type="button">Export device key</button>
+ <button class="btn btn-ghost" id="export-tsa-key" type="button">Export TSA key</button>
+ <span id="key-export-stat" class="hint"></span>
+ </div>
+ <details class="row" style="margin-top:8px">
+ <summary>Data subject rights (GDPR)</summary>
+ <p class="hint"><code>cli/bin/rights.mjs</code>.</p>
+ <label class="field rights-field"><span>Right</span>
+ <select id="rights-type">
+ <option value="access">Access</option>
+ <option value="rectification">Rectification</option>
+ <option value="erasure">Erasure</option>
+ <option value="restriction">Restriction</option>
+ <option value="objection">Objection</option>
+ </select>
+ </label>
+ <label class="field" style="flex:1 1 240px"><span>Subject</span>
+ <input type="text" id="rights-subject" placeholder="subject" style="width:100%">
+ </label>
+ <button class="btn btn-ghost" id="rights-submit" type="button">Submit</button>
+ <span id="rights-stat" class="hint"></span>
+ </details>
+ </section>
+
+ <footer>
+ <p data-lang="en"><strong>EN</strong> This tool produces tamper-resistant records. It is NOT a qualified electronic signature under eIDAS. No guarantee of admissibility in court is given. Identity verification of all participants is the sole responsibility of the user. Device timestamps may be altered.</p>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</div>
+
+<script type="module">
+ import './core/i18n.js';
+ import { buildSignatureRecordZip, createSealSession, inspectEvidencePackage, canonicalSignatureManifestText, DRAFT_MODE, SEALED_MODE } from './core/signature-manifest.js';
+ import { readZip } from './core/zip-reader.js';
+ import { createSignatureCanvas } from './helpers/canvas-draw.js';
+ import { createP2PSync } from './helpers/webrtc-sync.js';
+ import {
+ el, formatBytes, showToast, confirmDialog, downloadBlob,
+ registerServiceWorker, setOfflineIndicator
+ } from './ui/components.js';
+ import {
+ addEvent, isLogEnabled, setLogEnabled, exportJson, exportTxt, checkChainOnBoot,
+ getLog, verifyChain, getLastAnchorCheck, setAuditConfig, getAuditConfig
+ } from './helpers/local-audit-log.js';
+ import {
+ signedLogExport, verifySignedExport, chainHead
+ } from './helpers/audit-anchor.js';
+ import {
+ ensureDeviceKey
+ } from './helpers/audit-device-key.js';
+ import {
+ ensureTsaKey, getTsaSpki, externalTimestamp, createTimestamp
+ } from './helpers/audit-tsa.js';
+ import {
+ exportDevicePub, exportTsaPub, fingerprintSpki
+ } from './helpers/audit-key-export.js';
+
+ const $ = (id) => document.getElementById(id);
+ const session = createSealSession();
+ const canvasCtl = createSignatureCanvas($('sign-canvas'));
+ let evidenceBlob = null;
+ let evidenceInfo = null;
+ let parties = [];
+ let signMode = 'joint';
+ let signatureZipBlob = null;
+ let sealedManifestText = '';
+
+ const BROWSER_TZ = (Intl.DateTimeFormat().resolvedOptions() || {}).timeZone || 'UTC';
+
+ function isValidTimeZone(tz) {
+ try { new Intl.DateTimeFormat('en', { timeZone: tz }); return true; } catch (error) { return false; }
+ }
+
+ function trimOrNull(value) {
+ const text = String(value || '').trim();
+ return text ? text : null;
+ }
+
+ function buildPartyFields(prefix) {
+ const fields = {};
+ const role = $(prefix + '-role') ? $(prefix + '-role').value.trim() : '';
+ const map = { org: 'organization', ref: 'referenceId', license: 'licenseNo', reservation: 'reservation', tz: 'tzIana' };
+ for (const [suffix, key] of Object.entries(map)) {
+ const node = $(prefix + '-' + suffix);
+ const value = trimOrNull(node ? node.value : '');
+ if (value) fields[key] = value;
+ }
+ if (role) fields.role = role;
+ return fields;
+ }
+
+ function readIndependentParty() {
+ const name = $('current-signer').value.trim();
+ if (!name) return [];
+ return [Object.assign({ name, confirm: true }, buildPartyFields('ind'))];
+ }
+
+ registerServiceWorker();
+ setOfflineIndicator();
+ $('seal-tz').value = BROWSER_TZ;
+ $('party-tz').value = BROWSER_TZ;
+
+ const sync = createP2PSync({
+ onMessage: (message) => {
+ if (session.sealed) return;
+ if (message.kind === 'stroke') canvasCtl.addRemoteStroke(message.stroke);
+ if (message.kind === 'state' && Array.isArray(message.parties)) {
+ parties = mergeById(parties, message.parties, (party) => party.name);
+ renderParties();
+ if (message.sealNote && !$('seal-note').value.trim()) $('seal-note').value = message.sealNote;
+ showToast('P2P state received', 'info');
+ }
+ },
+ onConflict: () => {
+ showToast('Concurrent edit conflict', 'warn');
+ },
+ onState: (text) => { $('p2p-state').textContent = text; }
+ });
+
+ canvasCtl.onStroke((stroke) => {
+ if (session.sealed) return;
+ if ($('mode-p2p').checked) sync.send({ kind: 'stroke', stroke });
+ sync.markLocalEdit();
+ });
+ canvasCtl.onChange((count) => { $('stroke-count').textContent = count + ' strokes'; });
+
+ function mergeById(current, incoming, keyOf) {
+ const map = new Map(current.map((item) => [keyOf(item), item]));
+ for (const item of incoming) if (!map.has(keyOf(item))) map.set(keyOf(item), item);
+ return Array.from(map.values());
+ }
+
+ function renderEvidence() {
+ const host = $('evidence-result');
+ host.textContent = '';
+ if (!evidenceInfo) return;
+ const rows = [
+ ['Verification', evidenceInfo.ok ? 'OK' : 'FAILED'],
+ ['spec', evidenceInfo.spec || '-'],
+ ['packageId', evidenceInfo.manifest ? evidenceInfo.manifest.packageId : '-'],
+ ['rootHash', evidenceInfo.rootHash || '-'],
+ ['Files', String(evidenceInfo.fileCount)]
+ ];
+ for (const [label, value] of rows) {
+ host.appendChild(el('p', { style: 'margin:4px 0' }, [
+ el('strong', { text: label + ': ' }),
+ el('span', { class: 'mono', text: value })
+ ]));
+ }
+ if (!evidenceInfo.ok) {
+ host.appendChild(el('div', { class: 'notice', text: evidenceInfo.problems.join(' | ') }));
+ }
+ }
+
+ function updateSealButton() {
+ if (session.sealed) { $('seal-btn').disabled = true; return; }
+ let ready;
+ if (signMode === 'independent') {
+ ready = Boolean(evidenceInfo && evidenceInfo.ok) && parties.length === 1 && parties[0].name.trim() !== '';
+ } else {
+ ready = Boolean(evidenceInfo && evidenceInfo.ok) && parties.length > 0 && parties.every((party) => party.confirm);
+ }
+ $('seal-btn').disabled = !ready;
+ }
+
+ function applyMode() {
+ signMode = $('mode-independent').checked ? 'independent' : 'joint';
+ $('joint-parties').hidden = signMode === 'independent';
+ $('independent-party').hidden = signMode !== 'independent';
+ $('sync-card').hidden = signMode === 'independent';
+ $('parties-title').textContent = signMode === 'independent'
+ ? '3. Current signer'
+ : '3. Parties and note';
+ if (signMode === 'independent') {
+ parties = readIndependentParty();
+ } else {
+ parties = [];
+ }
+ renderParties();
+ updateSealButton();
+ }
+
+ function renderParties() {
+ const list = $('party-list');
+ list.textContent = '';
+ if (!parties.length) {
+ list.appendChild(el('p', { class: 'hint', text: 'No parties yet' }));
+ }
+ parties.forEach((party, index) => {
+ const box = el('input', { type: 'checkbox' });
+ box.checked = party.confirm;
+ box.disabled = session.sealed;
+ box.addEventListener('change', () => {
+ if (session.sealed) return;
+ party.confirm = box.checked;
+ updateSealButton();
+ });
+ const meta = [
+ el('strong', { text: party.name + (party.role ? ' · ' + party.role : '') }),
+ el('small', { text: party.confirm ? 'confirmed' : 'pending' })
+ ];
+ const details = [party.organization, party.referenceId, party.licenseNo].filter(Boolean).join('');
+ if (details) meta.push(el('small', { class: 'mono', text: details }));
+ if (party.reservation) meta.push(el('small', { text: '\u26A0 Reservation' + party.reservation }));
+ if (party.tzIana) meta.push(el('small', { class: 'mono', text: party.tzIana }));
+ list.appendChild(el('div', { class: 'file-item' }, [
+ box,
+ el('div', { class: 'file-meta' }, meta),
+ el('button', {
+ class: 'btn btn-ghost btn-danger',
+ text: 'Remove',
+ disabled: session.sealed,
+ onclick: () => { if (session.sealed) return; parties.splice(index, 1); renderParties(); }
+ })
+ ]));
+ });
+ updateSealButton();
+ }
+
+ $('import-btn').addEventListener('click', async () => {
+ const file = $('evidence-input').files[0];
+ if (!file) { showToast('Please select an evidence.zip', 'warn'); return; }
+ try {
+ evidenceInfo = await inspectEvidencePackage(file);
+ evidenceBlob = evidenceInfo.ok ? file : null;
+ renderEvidence();
+ showToast(evidenceInfo.ok
+ ? 'Evidence package valid'
+ : 'Evidence package invalid', evidenceInfo.ok ? 'ok' : 'error');
+ if (evidenceInfo.ok) { $('mode-select-card').hidden = false; applyMode(); addEvent({ eventType: 'import-evidence', packageId: evidenceInfo.manifest.packageId }); }
+ updateSealButton();
+ } catch (error) {
+ evidenceInfo = null;
+ evidenceBlob = null;
+ showToast('Import failed' + error.message, 'error');
+ updateSealButton();
+ }
+ });
+
+ $('party-add').addEventListener('click', () => {
+ if (session.sealed) return;
+ const name = $('party-name').value.trim();
+ if (!name) { showToast('Name is required', 'warn'); return; }
+ if (parties.some((party) => party.name === name)) { showToast('Name already exists', 'warn'); return; }
+ const tz = trimOrNull($('party-tz').value);
+ if (tz && !isValidTimeZone(tz)) { showToast('Invalid timezone / IANA, e.g. Europe / Berlin)', 'warn'); return; }
+ parties.push(Object.assign({ name, confirm: false }, buildPartyFields('party')));
+ $('party-name').value = '';
+ $('party-org').value = '';
+ $('party-ref').value = '';
+ $('party-license').value = '';
+ $('party-reservation').value = '';
+ renderParties();
+ });
+ $('seal-note').addEventListener('input', () => { if (!session.sealed) updateSealButton(); });
+
+ $('stroke-color').addEventListener('input', (event) => canvasCtl.setStyle(event.target.value, null));
+ $('stroke-width').addEventListener('input', (event) => canvasCtl.setStyle(null, Number(event.target.value)));
+ $('undo-btn').addEventListener('click', () => canvasCtl.undo());
+ $('clear-btn').addEventListener('click', () => canvasCtl.clear());
+
+ for (const id of ['mode-offline', 'mode-p2p']) {
+ $(id).addEventListener('change', () => {
+ $('offline-block').hidden = !$('mode-offline').checked;
+ $('p2p-block').hidden = !$('mode-p2p').checked;
+ if ($('mode-offline').checked) sync.close();
+ });
+ }
+
+ $('export-draft').addEventListener('click', () => {
+ if (session.sealed) return;
+ const draft = {
+ kind: 'fieldseal-sign-draft',
+ linkedEvidenceId: evidenceInfo && evidenceInfo.manifest ? evidenceInfo.manifest.packageId : '',
+ linkedEvidenceRootHash: evidenceInfo ? evidenceInfo.rootHash : '',
+ parties,
+ sealNote: $('seal-note').value.trim(),
+ strokes: canvasCtl.getStrokes()
+ };
+ downloadBlob(new Blob([JSON.stringify(draft, null, 2)], { type: 'application/json' }), 'sign-draft.json');
+ showToast('Draft lokal exportiert', 'ok');
+ });
+
+ $('import-draft').addEventListener('click', () => $('draft-input').click());
+ $('draft-input').addEventListener('change', async (event) => {
+ const file = event.target.files[0];
+ event.target.value = '';
+ if (!file || session.sealed) return;
+ try {
+ const draft = JSON.parse(await file.text());
+ if (draft.kind !== 'fieldseal-sign-draft') throw new Error('No FieldSeal draft / FieldSeal');
+ if (evidenceInfo && draft.linkedEvidenceId && draft.linkedEvidenceId !== evidenceInfo.manifest.packageId) {
+ throw new Error('Draft belongs to a different evidence package');
+ }
+ parties = mergeById(parties, Array.isArray(draft.parties) ? draft.parties : [], (party) => party.name);
+ const added = canvasCtl.mergeStrokes(draft.strokes);
+ if (draft.sealNote && !$('seal-note').value.trim()) $('seal-note').value = draft.sealNote;
+ renderParties();
+ showToast('Draft merged manually (' + added + ' strokes)', 'ok');
+ } catch (error) {
+ showToast('Draft import failed' + error.message, 'error');
+ }
+ });
+
+ $('offer-btn').addEventListener('click', async () => {
+ try { $('p2p-text').value = await sync.createOffer(); }
+ catch (error) { showToast(error.message, 'error'); }
+ });
+ $('answer-btn').addEventListener('click', async () => {
+ try { $('p2p-text').value = await sync.acceptOffer($('p2p-text').value.trim()); }
+ catch (error) { showToast('Invitation invalid' + error.message, 'error'); }
+ });
+ $('apply-answer-btn').addEventListener('click', async () => {
+ try { await sync.acceptAnswer($('p2p-text').value.trim()); }
+ catch (error) { showToast('Response invalid' + error.message, 'error'); }
+ });
+ $('sync-state-btn').addEventListener('click', () => {
+ if (session.sealed) return;
+ sync.send({ kind: 'state', parties, sealNote: $('seal-note').value.trim() });
+ });
+
+ function lockDraftControls() {
+ const ids = [
+ 'evidence-input', 'import-btn', 'stroke-color', 'stroke-width', 'undo-btn', 'clear-btn',
+ 'party-name', 'party-role', 'party-org', 'party-ref', 'party-license', 'party-reservation', 'party-tz', 'party-add',
+ 'current-signer', 'ind-role', 'ind-org', 'ind-ref', 'ind-license', 'ind-reservation',
+ 'seal-note', 'seal-tz', 'export-draft', 'import-draft', 'draft-input',
+ 'offer-btn', 'answer-btn', 'apply-answer-btn', 'sync-state-btn', 'p2p-text',
+ 'mode-offline', 'mode-p2p', 'mode-joint', 'mode-independent', 'seal-btn',
+ 'supplement-input', 'supplement-btn'
+ ];
+ for (const id of ids) { const node = $(id); if (node) node.disabled = true; }
+ canvasCtl.setLocked(true);
+ sync.close();
+ $('p2p-state').textContent = 'SEALED - synchronization ended';
+ renderParties();
+ }
+
+ $('seal-btn').addEventListener('click', async () => {
+ if (!evidenceBlob || !evidenceInfo || !evidenceInfo.ok) { showToast('Valid evidence package is missing', 'warn'); return; }
+ if (signMode === 'joint') {
+ if (!parties.length || !parties.every((party) => party.confirm)) {
+ showToast('All parties must confirm', 'warn');
+ return;
+ }
+ } else {
+ if (!parties.length || !parties[0].name.trim()) {
+ showToast('Current signer is missing', 'warn');
+ return;
+ }
+ }
+ const sealTz = trimOrNull($('seal-tz').value);
+ if (sealTz && !isValidTimeZone(sealTz)) {
+ showToast('Invalid timezone / IANA, e.g. Europe / Berlin)', 'warn');
+ return;
+ }
+ const reservationNote = parties.some((party) => party.reservation)
+ ? 'Warning: at least one party has a reservation'
+ : '';
+ const ok = await confirmDialog('Seal locks the canvas, parties and note permanently. Only export remains possible. Continue?' + reservationNote);
+ if (!ok) return;
+ try {
+ const snapshot = await canvasCtl.exportSnapshot();
+ const result = await session.seal({
+ evidenceBlob,
+ snapshotBlob: snapshot,
+ parties,
+ sealNote: $('seal-note').value.trim(),
+ tzIana: sealTz || undefined,
+ signMode
+ });
+ signatureZipBlob = await buildSignatureRecordZip(result.manifest, snapshot, { signMode: result.signMode, modeNote: result.modeNote });
+ sealedManifestText = canonicalSignatureManifestText(result.manifest);
+ lockDraftControls();
+ $('mode-badge').dataset.step = 'download';
+ $('mode-label').textContent = SEALED_MODE;
+ $('status-text').textContent = 'Locked - export only';
+ $('result').classList.add('visible');
+ $('result-package-id').textContent = result.manifest.packageId;
+ $('result-root-hash').textContent = result.manifest.rootHash;
+ $('result-linked-hash').textContent = result.manifest.linkedEvidenceRootHash;
+ $('result-snapshot-hash').textContent = result.manifest.canvasSnapshotHash;
+ $('result-size').textContent = formatBytes(signatureZipBlob.size) + ' | manifest.json + aux/canvas-snapshot.png + aux/sign-mode.json';
+ $('manifest-preview').textContent = JSON.stringify(JSON.parse(canonicalSignatureManifestText(result.manifest)), null, 2);
+ $('export-btn').disabled = false;
+ $('export-manifest-btn').disabled = false;
+ $('legal-note').hidden = false;
+ addEvent({ eventType: 'seal', packageId: result.manifest.packageId });
+ showToast('SEALED LOCKED MODE', 'ok');
+ } catch (error) {
+ showToast('Seal failed' + error.message, 'error');
+ }
+ });
+
+ $('export-btn').addEventListener('click', () => {
+ if (!signatureZipBlob || !session.sealed) return;
+ downloadBlob(signatureZipBlob, 'signature-record.zip');
+ addEvent({ eventType: 'export-signature', packageId: $('result-package-id').textContent });
+ showToast('Download signature-record.zip', 'ok');
+ });
+
+ $('export-manifest-btn').addEventListener('click', () => {
+ if (!sealedManifestText || !session.sealed) return;
+ downloadBlob(new Blob([sealedManifestText], { type: 'application/json' }), 'manifest.json');
+ addEvent({ eventType: 'export-manifest', packageId: $('result-package-id').textContent });
+ showToast('Download manifest.json', 'ok');
+ });
+
+ $('supplement-btn').addEventListener('click', async () => {
+ const file = $('supplement-input').files[0];
+ if (!file) { showToast('Please select a supplement.zip', 'warn'); return; }
+ const host = $('supplement-result');
+ host.textContent = '';
+ try {
+ const handle = await readZip(file);
+ let manifest;
+ try {
+ manifest = JSON.parse(await handle.readText('manifest.json', 8 * 1024 * 1024));
+ } catch (error) {
+ throw new Error('manifest.json unlesbar / manifest.json');
+ }
+ if (!manifest || manifest.spec !== 'fieldseal-supplement-v0.1') {
+ throw new Error('No supplement package (fieldseal-supplement-v0.1)');
+ }
+ const boundToCurrent = Boolean(evidenceInfo && evidenceInfo.manifest
+ && manifest.supplementToEvidenceId === evidenceInfo.manifest.packageId);
+ const rows = [
+ ['packageId', manifest.packageId || '-'],
+ ['createdAt', manifest.createdAt || '-'],
+ ['Bound to evidence package', manifest.supplementToEvidenceId || '-'],
+ ['Note', manifest.note || '-'],
+ ['Files', String(Array.isArray(manifest.files) ? manifest.files.length : 0)]
+ ];
+ for (const [label, value] of rows) {
+ host.appendChild(el('p', { style: 'margin:4px 0' }, [
+ el('strong', { text: label + ': ' }),
+ el('span', { class: 'mono', text: String(value) })
+ ]));
+ }
+ if (evidenceInfo && evidenceInfo.ok && !boundToCurrent) {
+ host.appendChild(el('div', {
+ class: 'notice',
+ text: '\u26A0\uFE0F This supplement does NOT belong to the current evidence package.'
+ }));
+ } else {
+ host.appendChild(el('p', { class: 'hint', text: boundToCurrent ? 'Bound to the current evidence package' : 'Supplement loaded' }));
+ }
+ addEvent({ eventType: 'import-supplement', packageId: manifest.packageId });
+ showToast('Supplement verified', 'ok');
+ } catch (error) {
+ host.appendChild(el('div', { class: 'notice', text: 'Supplement verification failed: ' + error.message }));
+ showToast('Supplement invalid', 'error');
+ }
+ });
+
+ for (const id of ['mode-joint', 'mode-independent']) {
+ $(id).addEventListener('change', applyMode);
+ }
+ $('current-signer').addEventListener('input', () => {
+ if (session.sealed || signMode !== 'independent') return;
+ parties = readIndependentParty();
+ updateSealButton();
+ });
+
+ $('mode-badge').dataset.step = 'draft';
+ $('mode-label').textContent = DRAFT_MODE;
+ renderParties();
+ updateSealButton();
+
+ $('log-toggle').checked = isLogEnabled();
+ $('log-toggle').addEventListener('change', () => {
+ setLogEnabled($('log-toggle').checked);
+ showToast($('log-toggle').checked ? 'Local audit trail enabled' : 'Local audit trail disabled', 'info');
+ }); // Build a signed export anchored by the device key + a timestamp anchor, branching on / getAuditConfig().tsa.mode:
+ // 'off' -> no timestamp anchoring (must not be reported as "TSA ok").
+ // 'local' -> a LOCAL on-device TSA attestation (separate non-extractable key).
+ // 'external' -> a REAL RFC3161 token from the configured TSA endpoint. On ANY failure / unreachable / non-RFC3161 / no root we THROW — no silent fallback to / a local token, so an externally-anchored claim is never faked.
+ async function buildSignedExport(entries) {
+ const kp = await ensureDeviceKey();
+ const head = chainHead(entries);
+ const cfg = getAuditConfig();
+ const mode = (cfg.tsa && cfg.tsa.mode) || 'local';
+ let tsaToken = null, tsaRootFingerprint = null;
+ if (mode === 'off') { // no timestamp anchoring
+ } else if (mode === 'external' && cfg.tsa.endpoint) {
+ const ext = await externalTimestamp(head, cfg.tsa.endpoint, cfg.tsa.trustedRoot);
+ if (!ext || ext.kind !== 'rfc3161') throw new Error('external TSA did not return a valid RFC3161 token');
+ tsaToken = ext;
+ if (ext.tsaRootSpki) tsaRootFingerprint = await fingerprintSpki(ext.tsaRootSpki);
+ } else {
+ const tsa = await ensureTsaKey();
+ tsaToken = await createTimestamp(head, { tsaKeyPair: tsa, genTime: new Date().toISOString() });
+ tsaRootFingerprint = await fingerprintSpki(tsa.spki);
+ }
+ return signedLogExport(entries, kp, { tsaMode: mode, tsaToken, tsaRootFingerprint });
+ }
+ $('export-log-json').addEventListener('click', async () => {
+ try {
+ const chain = await verifyChain();
+ const exp = await buildSignedExport(getLog());
+ downloadBlob(new Blob([JSON.stringify(exp, null, 2)], { type: 'application/json' }), 'recipient-audit-log-signed.json');
+ showToast('Audit log signed + TSA-anchored export: ' + chain.count + ' entries', 'ok');
+ } catch (e) {
+ showToast('Export failed' + e.message, 'error');
+ }
+ });
+ $('export-log-txt').addEventListener('click', () => {
+ downloadBlob(new Blob([exportTxt()], { type: 'text/plain' }), 'recipient-audit-log.txt');
+ showToast('Audit log TXT exported', 'ok');
+ }); // Verify a signed audit-log export against THIS device's trusted key (offline). / The trusted key is never taken from the file — it is the device key established / at first run, so a file signed by a different device (or a forged key) is rejected.
+ $('verify-log-btn').addEventListener('click', async () => {
+ const file = $('verify-log-file') && $('verify-log-file').files && $('verify-log-file').files[0];
+ if (!file) { showToast('Please select a signed log file', 'info'); return; }
+ try {
+ const parsed = JSON.parse(await file.text());
+ const r = await verifySignedExport(parsed, (await ensureDeviceKey()).spki, { trustedTsaSpki: getTsaSpki() });
+ if (r.ok && r.tsaExternalPendingDoctor) { // External RFC3161 is NOT verified in-browser (we never hand-roll ASN.1); it must be / confirmed by doctor via openssl. Show a pending state, NOT "verified".
+ showToast('Signature valid / RFC3161 doctor openssl ：node cli / bin / doctor.mjs --audit-log <file> --device-key <spki> --tsa-root <root.pem>', 'warn');
+ } else if (r.ok) {
+ showToast('Signature valid, ' + (r.count != null ? r.count : '') + ' entries, head ' + String(r.head).slice(0, 8) + '…', 'ok');
+ } else {
+ showToast('Signature invalid' + r.reason, 'error');
+ }
+ } catch (e) {
+ showToast('Verify failed' + e.message, 'error');
+ }
+ }); // TSA / external-anchor settings (persisted via setAuditConfig). Default mode is
+ // 'local' (device TSA key, dual independent keys); 'external' + endpoint + trusted / root upgrades to third-party RFC3161 anchoring (EP-001 contract).
+ (() => {
+ try {
+ const c = setAuditConfig({});
+ const sel = $('tsa-mode'); if (sel && c.tsa) sel.value = c.tsa.mode || 'local';
+ if ($('tsa-endpoint')) $('tsa-endpoint').value = (c.tsa && c.tsa.endpoint) || '';
+ if ($('tsa-root')) $('tsa-root').value = (c.tsa && c.tsa.trustedRoot) || '';
+ } catch { /* ignore */ }
+ const save = $('tsa-save');
+ if (save) save.addEventListener('click', () => {
+ try {
+ const cfg = setAuditConfig({ tsa: {
+ mode: $('tsa-mode').value,
+ endpoint: $('tsa-endpoint').value.trim(),
+ trustedRoot: $('tsa-root').value.trim()
+ } });
+ if ($('tsa-stat')) $('tsa-stat').textContent = 'saved:' + cfg.tsa.mode;
+ showToast('TSA', 'ok');
+ } catch (e) { if ($('tsa-stat')) $('tsa-stat').textContent = '' + e.message; }
+ });
+ })(); // GDPR data-subject rights request (9.0 C2): record the request with a 1-month / statutory response deadline (Art. 12(3)) and an audit event. The same record shape / is produced offline by cli/bin/rights.mjs.
+ const rightsSubmit = $('rights-submit');
+ if (rightsSubmit) rightsSubmit.addEventListener('click', () => {
+ try {
+ const type = $('rights-type').value;
+ const subject = ($('rights-subject').value || '').trim() || 'unknown';
+ const received = new Date();
+ const due = new Date(received.getTime()); due.setMonth(due.getMonth() + 1);
+ const id = 'R' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+ addEvent({
+ eventType: 'data_rights_request', actor: { name: subject }, target: { type: 'right', id },
+ detail: { right: type, received: received.toISOString(), due: due.toISOString().slice(0, 10), status: 'received' }
+ });
+ if ($('rights-stat')) $('rights-stat').textContent = id + ' (' + type + ') \u00b7 due ' + due.toISOString().slice(0, 10);
+ showToast('recorded:' + id, 'ok');
+ } catch (e) { if ($('rights-stat')) $('rights-stat').textContent = '' + e.message; }
+ }); // 9.0 A2 — distribute the device signing key and the SEPARATE TSA public key as .pub / files (SPKI, fingerprint-named). Recipients verify exports out-of-band against these / keys and pass them to `doctor --device-key <file> --tsa-key <file>`. Private keys stay / non-extractable and are NEVER exported.
+ const expDevice = $('export-device-key');
+ if (expDevice) expDevice.addEventListener('click', async () => {
+ try {
+ const r = await exportDevicePub();
+ if ($('key-export-stat')) $('key-export-stat').textContent = 'device-key-' + r.fingerprint + '.pub (fp ' + r.fingerprint + ')';
+ showToast('device public key exported', 'ok');
+ } catch (e) { if ($('key-export-stat')) $('key-export-stat').textContent = '' + e.message; }
+ });
+ const expTsa = $('export-tsa-key');
+ if (expTsa) expTsa.addEventListener('click', async () => {
+ try {
+ const r = await exportTsaPub();
+ if ($('key-export-stat')) $('key-export-stat').textContent = 'tsa-key-' + r.fingerprint + '.pub (fp ' + r.fingerprint + ')';
+ showToast('TSA / TSA public key exported', 'ok');
+ } catch (e) { if ($('key-export-stat')) $('key-export-stat').textContent = '' + e.message; }
+ }); // Delivery audit A3 / A6: verify the local trail's hash chain on boot and / show a persistent, screen-reader-announced banner if it was tampered with. / The chain export stays available so an operator can preserve the evidence.
+ (async () => {
+ try {
+ const health = await checkChainOnBoot();
+ const anchor = getLastAnchorCheck();
+ if (health.ok && anchor.ok) return;
+ const reason = !health.ok
+ ? ('chain: ' + health.reason + (health.index != null ? ' @' + health.index : ''))
+ : ('anchor: ' + anchor.reason);
+ const banner = el('div', {
+ class: 'state-banner', role: 'alert',
+ text: 'Local audit trail compromised' + reason +
+ '). Please export and verify.'
+ });
+ banner.style.borderLeftColor = 'var(--bad)';
+ const exportLink = el('button', {
+ class: 'btn btn-ghost', text: 'Export chain',
+ onclick: async () => {
+ try {
+ const exp = await buildSignedExport(getLog());
+ downloadBlob(new Blob([JSON.stringify(exp, null, 2)], { type: 'application/json' }), 'recipient-audit-log-chain-signed.json');
+ showToast('Current chain signed + TSA-anchored and exported', 'ok');
+ } catch (e) {
+ showToast('Export failed' + e.message, 'error');
+ }
+ }
+ });
+ banner.appendChild(exportLink);
+ document.body.prepend(banner);
+ } catch (e) { /* integrity warning must never break page boot */ }
+ })();
+</script>
+</body>
+</html>

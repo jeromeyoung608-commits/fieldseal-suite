@@ -1,0 +1,12 @@
+### Result
+{"id":"e8265b04-606f-438e-b4c9-0e1ddf861901","dicts":"dictionaries 1","v04":true,"file":"case-e8265b04-draft.zip","coreResult":"coreResult: ok"}
+### Ran Playwright code
+```js
+await (async () => { const BASE='http://127.0.0.1:8123/pwa/'; await page.goto(BASE+'cases.html',{waitUntil:'domcontentloaded'}); await page.getByRole('link',{name:/Neuer Fall/}).click(); await page.waitForURL(/newcase/); await page.locator('#title').fill('UI-CHECK smoke'); await page.locator('#template').selectOption('builtin:blank'); await page.getByRole('button',{name:/Fall anlegen/}).click(); await page.waitForURL(/case-detail/); await page.waitForSelector('.state-banner'); const id=new URL(page.url()).searchParams.get('id'); await page.locator('#v04-dict-id').fill('condition'); await page.locator('#v04-dict-vals').fill('sealed,damaged'); const b=page.getByRole('button',{name:/字典新增/}); try{await Promise.all([page.waitForEvent('framenavigated',{timeout:8000}).catch(()=>{}),b.click()]);}catch(e){} await page.waitForLoadState('domcontentloaded'); const body=await page.locator('body').innerText(); await page.getByRole('link',{name:/Export & Pruefpanel/}).click(); await page.waitForURL(/case-export/); const [dl]=await Promise.all([page.waitForEvent('download'),page.getByRole('button',{name:/Fall-ZIP exportieren/}).click()]); await dl.saveAs('/Users/yangjie/CodeBuddy/20261111145003/fieldseal-suite/reports/v04/v04-case-export.zip'); return {id,dicts:(body.match(/dictionaries \d+/)||[])[0],v04:body.includes('v0.4 增量功能'),file:dl.suggestedFilename(),coreResult:(await page.locator('body').innerText()).match(/coreResult: [a-z_]+/)[0]}; })(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8123/pwa/case-export.html?id=e8265b04-606f-438e-b4c9-0e1ddf861901
+- Page Title: Export & Verification - FieldSeal Suite
+### Events
+- Downloading file case-e8265b04-draft.zip ...
+- Downloaded file case-e8265b04-draft.zip to ".playwright-cli/case-e8265b04-draft.zip"

@@ -1,0 +1,1 @@
+TRUSTED CORE — 100% hand-written source. Web Standard API only (WebCrypto, CompressionStream, File, MediaDevices). No package.json, no npm install, no third-party dependencies, no external code.

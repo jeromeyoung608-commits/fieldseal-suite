@@ -1,0 +1,31 @@
+### Result
+{"spec":"fieldseal-case-v0.5","rootHash":"sha256:618961cb328b326719dfc8b2a8d3b4532f3987f43075a774349badfc7c556106","sealHash":"sha256:a4a70419323a16de17c8012b58a9e7963339da9bdd3cfbfa6441f91683c6e177"}
+### Ran Playwright code
+```js
+await (async () => {
+  await page.goto("http://127.0.0.1:8123/pwa/index.html", { waitUntil: "domcontentloaded" });
+  const r = await page.evaluate(async () => {
+    const K = await import("./core/case-manifest.js");
+    const S = await import("./helpers/case-store.js");
+    const ex = await import("./helpers/case-export.js");
+    let c = await K.createCase({ metaTemplate: "blank", caseMeta: { title: "GOLDEN v0.5 sample" } });
+    c = await K.bindOperatorProfile(c, { operatorName: "Jane Doe", operatorTitle: "Field Investigator", orgId: "ORG-DEMO", operatorId: "BADGE-001" });
+    c = await K.addHumanNote(c, { noteText: "Device seized at 10:0000 UTC in presence of witness. Consent obtained.", jurisdictionContext: "US-FRE" });
+    c = await K.setJurisdiction(c, "US-FRE");
+    c = await K.sealCase(c, { actorName: "Jane Doe" });
+    const pkgs = await S.listEvidencePackages(c.packageId);
+    const blob = await ex.buildCaseExportZip(c, pkgs, {});
+    const buf = new Uint8Array(await blob.arrayBuffer());
+    let s = ""; for (const x of buf) s += String.fromCharCode(x);
+    const b64 = btoa(s);
+    await fetch("http://127.0.0.1:8731/store?name=golden-v0.5-sealed", { method: "POST", headers: { "Content-Type": "text/plain" }, body: b64 });
+    return { spec: c.specVersion, rootHash: c.rootHash, sealHash: c.sealHash };
+  });
+  return r;
+})(page);
+```
+### Page
+- Page URL: http://127.0.0.1:8123/pwa/index.html
+- Page Title: FieldSeal Suite
+### Events
+- New console entries: .playwright-cli/console-2026-11-13T04-24-00-048Z.log#L13

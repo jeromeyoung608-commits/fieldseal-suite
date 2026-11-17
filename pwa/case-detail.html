@@ -1,0 +1,1624 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Case Detail - FieldSeal Suite</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+</head>
+<body>
+<div class="wrap">
+ <div class="topbar">
+ <div class="brand">
+ <img src="./assets/icon.svg" alt="FieldSeal">
+ <div>
+ <h1 id="title">Case Detail</h1>
+ <p><span>Case detail</span> · <a href="./cases.html">Cases</a></p>
+ </div>
+ </div>
+ <span class="net-state" id="net-state">Offline-ready</span>
+ <span id="lang-switch" class="lang-switch-host"></span>
+ </div>
+
+ <a class="back-link" href="./cases.html">&larr; Case list</a>
+
+ <div id="content"></div>
+
+ <footer>
+ <p data-lang="en"><strong>EN</strong> The case is stored locally (IndexedDB). The <span class="mono">sealHash</span> is the sole source of trust and becomes authoritative only when sealed.</p>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</div>
+
+<script type="module">
+ import './core/i18n.js';
+ import {
+ getCase, putCase, putCaseIfUnchanged, getEvidencePackage, listEvidencePackages,
+ putCaseCipher, getCaseCipher, deleteCaseCipher,
+ putSignatureImage, getSignatureImage, available
+ } from './helpers/case-store.js';
+ import { renderAuditTimeline } from './helpers/audit-timeline.js';
+ import {
+ supplementSchema, verifyCase, sealCase, META_TEMPLATES, COUNTERSIGN_DECISIONS, MAX_SIGNATURE_BYTES,
+ setSchemaLocked, sendForCountersign, addCountersign, setCaseEncryption, clearCaseEncryption, appendAuditEvent,
+ SPEC_VERSION_V04, CASE_SPEC_VERSIONS, resolveSpecVersion, isV04Case, v04ActionAllowed, NOTE_DECISIONS,
+ bindOperatorProfile, bindOperatorIdentity, addHumanNote, addHumanNoteMeta, setExhibitId,
+ bindConsentRecord, bindAffidavit, recordTransferReceipt,
+ configureBates, assignBates, addWitnessStatement, setRetention, addMediaRedaction,
+ setApprovalPolicy, recordApproval, requireApproval, recordGeoAttestation,
+ migrateCaseToV04, addSchemaDictionary, editSchemaDictionary, removeSchemaDictionary,
+ batchUpdateItemField, recordWatermark, recordSnapshot, addThirdPartyNote,
+ setSoftDeleted, setReportBranding, setWatermarkConfig, attachTsaTimestamp
+ } from './core/case-manifest.js';
+ import { isoUtcNow, sha256Uri } from './core/hash.js';
+ import { requestTimestamp } from './vendor/tsa-timestamp.js';
+ import { encryptCaseArchive, classifyCipherResult, secureContextAvailable, CIPHER_FILE } from './helpers/case-crypto.js';
+ import { buildSnapshotZip, SNAPSHOT_NOTICE } from './helpers/case-snapshot.js';
+ import { applyVisibleWatermark } from './helpers/case-watermark.js';
+ import { HOOK_IDS, FEATURE_FLAGS, hookStatus, callHook } from './helpers/ext-hooks.js';
+ import { estimateQuota, quotaWarningText } from './helpers/storage-quota.js';
+ import { startBackupReminder, BACKUP_BROWSER_LIMIT } from './helpers/backup-reminder.js';
+ import { buildCaseExportZip, caseExportFileName, buildBagitZip } from './helpers/case-export.js';
+ import { ATTRIBUTION_LINE } from './helpers/attribution.js';
+ import './ui/signature-pad.js';
+ import { el, showToast, downloadBlob, registerServiceWorker, setOfflineIndicator } from './ui/components.js';
+ import { loadAegisConfig, saveAegisConfig, pushHashToAegis } from './helpers/aegis-push.js';
+ import { loadOperatorProfiles, upsertOperatorProfile, deleteOperatorProfile, loadOperatorIdentities, upsertOperatorIdentity, deleteOperatorIdentity } from './helpers/operator-profiles.js';
+
+ const $ = (id) => document.getElementById(id);
+ const STATE_LABEL = {
+ draft: 'Draft',
+ 'pending-configuration': 'Pending configuration',
+ pending_countersign: 'Awaiting countersign',
+ sealed: 'Sealed'
+ };
+ const STATE_BANNER = {
+ draft: 'DRAFT / Captures and schema are editable; not sealed yet. / Schema',
+ 'pending-configuration': 'PENDING CONFIGURATION / EMERGENCY PATH: secure media first.',
+ pending_countersign: 'AWAITING COUNTERSIGN / Awaiting countersign / Only countersignatures, notes and handwritten signatures may be added.',
+ sealed: 'SEALED / All writes are permanently locked.'
+ };
+ const EVENT_LABEL = {
+ Collected: 'Captured', Transferred: 'Transferred', Reviewed: 'Reviewed',
+ Sealed: 'Sealed', Unsealed: 'Unsealed', Archived: 'Archived', Destroyed: 'Destroyed'
+ };
+
+ registerServiceWorker();
+ setOfflineIndicator();
+
+ const params = new URLSearchParams(location.search);
+ const id = params.get('id');
+
+ function pill(f) {
+ const kids = [el('strong', { text: f.label || f.key }), el('span', { class: 'ft', text: f.type })];
+ if (f.required) kids.push(el('span', { class: 'fr', text: 'required' }));
+ const p = el('span', { class: 'field-pill' + (f.required ? ' required' : '') }, kids);
+ if (Array.isArray(f.options) && f.options.length) p.appendChild(el('span', { class: 'fo', text: f.options.join('') }));
+ return p;
+ }
+
+ function kv(rows) {
+ const dl = el('dl', { class: 'kv' });
+ for (const [k, v] of rows) {
+ dl.appendChild(el('dt', { text: k }));
+ if (v && v.nodeType) {
+ dl.appendChild(el('dd', {}, [v]));
+ } else {
+ const mono = v && v.mono;
+ dl.appendChild(el('dd', { class: mono ? 'mono' : '', text: v && v.text !== undefined ? v.text : (v || '') }));
+ }
+ }
+ return dl;
+ }
+
+ function section(title, bodyNode) {
+ return el('div', { class: 'card' }, [el('h2', { text: title }), bodyNode]);
+ }
+
+ function emptyNote(text) { return el('div', { class: 'section-empty', text }); }
+
+ function render(c) {
+ document.title = (c.caseMeta && c.caseMeta.title ? c.caseMeta.title : c.packageId) + ' - FieldSeal';
+ $('title').textContent = (c.caseMeta && c.caseMeta.title) || 'Case Detail';
+
+ const host = $('content');
+ host.textContent = ''; // Header — trilingual workflow status bar (Draft / Awaiting Countersign / Sealed)
+ host.appendChild(el('div', { class: 'state-banner state-' + c.state, text: STATE_BANNER[c.state] || c.state }));
+ host.appendChild(section('Case', kv([
+ ['Status', el('span', { class: 'state-badge state-' + c.state, text: STATE_LABEL[c.state] || c.state })],
+ ['Template', c.schemaDef.metaTemplate],
+ ['Algorithmus', c.hashAlgorithm],
+ ['Created', c.createdAt],
+ ['Sealed', c.sealedAt || ''],
+ ['Schema-Lock', c.schemaLocked === true ? 'LOCKED' : 'unlocked'],
+ ['Encryption', c.caseEncryptionMeta ? c.caseEncryptionMeta.algorithm + ' / ' + c.caseEncryptionMeta.kdf : 'none'],
+ ['Countersignatures', String((c.countersignList || []).length)],
+ ['Audit-Events', String((c.auditLog || []).length)],
+ ['caseId', { text: c.packageId, mono: true }],
+ ['rootHash', { text: c.rootHash || '', mono: true }],
+ ['sealHash', { text: c.sealHash || '', mono: true }]
+ ]))); // Schema
+ const schemaBody = el('div', {});
+ schemaBody.appendChild(el('h3', { text: 'Global (case-wide)' }));
+ schemaBody.appendChild(c.schemaDef.globalFields.length ? el('div', { class: 'field-list' }, c.schemaDef.globalFields.map(pill)) : emptyNote('None'));
+ schemaBody.appendChild(el('h3', { text: 'Item (per capture)' }));
+ schemaBody.appendChild(c.schemaDef.itemFields.length ? el('div', { class: 'field-list' }, c.schemaDef.itemFields.map(pill)) : emptyNote('None'));
+ host.appendChild(section('Schema', schemaBody));
+ host.appendChild(renderOperatorSection(c));
+ host.appendChild(renderHumanNotesSection(c));
+ host.appendChild(renderConsentSection(c));
+ host.appendChild(renderAffidavitSection(c));
+ host.appendChild(renderTransferReceiptSection(c));
+ host.appendChild(renderBatesSection(c));
+ host.appendChild(renderWitnessSection(c));
+ host.appendChild(renderRetentionSection(c));
+ host.appendChild(renderMediaRedactionSection(c));
+ host.appendChild(renderApprovalSection(c));
+ host.appendChild(renderGeoSection(c));
+ host.appendChild(renderTsaSection(c)); // Captures
+ function captureRow(ch) {
+ const collected = c.custodyLog.find((e) => e.eventType === 'Collected' && e.evidenceId === ch.evidenceId);
+ const exhibitBlocked = c.state === 'sealed' || c.state === 'pending_countersign';
+ const exhibitInput = el('input', { type: 'text', value: ch.exhibitId || '', placeholder: 'Exhibit / e.g. A-1', class: 'exhibit-input', style: 'margin-top:6px;width:100%' });
+ if (exhibitBlocked) exhibitInput.setAttribute('disabled', '');
+ exhibitInput.onchange = async () => {
+ try { const next = await setExhibitId(c, ch.evidenceId, exhibitInput.value.trim()); await v04Commit(next, 'Exhibit ID saved'); }
+ catch (e) { showToast('Exhibit failed' + e.message, 'error'); }
+ };
+ return el('li', { class: 'log-item' }, [
+ el('div', { class: 'row', style: 'justify-content:space-between' }, [
+ el('strong', { text: 'Captured' + (ch.evidenceId || '') }),
+ el('button', {
+ class: 'btn btn-ghost', text: 'Download package',
+ onclick: async () => {
+ try {
+ const rec = await getEvidencePackage(ch.packageId);
+ if (!rec || !rec.blob) { showToast('Package not available locally', 'warn'); return; }
+ downloadBlob(rec.blob, ch.packageId + '.zip');
+ } catch (e) { showToast('Download failed' + e.message, 'error'); }
+ }
+ })
+ ]),
+ el('div', { class: 'lm', text: (ch.packageId || '') + ' \u00b7 ' + (ch.capturedUtc || '') }),
+ el('div', { class: 'lm', text: 'rootHash ' + (ch.rootHash || '') }),
+ collected && collected.itemValues && Object.keys(collected.itemValues).length
+ ? el('div', { class: 'lm', text: 'itemValues: ' + JSON.stringify(collected.itemValues) }) : null,
+ collected && collected.actorName
+ ? el('div', { class: 'lm', text: collected.actorName + ' \u00b7 ' + (collected.ianaTz || 'UTC') }) : null,
+ exhibitInput
+ ]);
+ }
+ const capBody = c.children.length
+ ? el('ul', { class: 'log-list' }, c.children.map(captureRow))
+ : emptyNote('No captures yet. Add one via "Save capture".');
+ host.appendChild(section('Captures (' + c.children.length + ')', capBody)); // Custody
+ const cusBody = c.custodyLog.length
+ ? el('ul', { class: 'log-list' }, c.custodyLog.map((e) => el('li', { class: 'log-item' }, [
+ el('strong', { text: (EVENT_LABEL[e.eventType] || e.eventType) + (e.actorName ? '' + e.actorName : '') + (e.transferPurpose ? '' + e.transferPurpose : '') }),
+ el('div', { class: 'lm', text: (e.utc || '') + ' (' + (e.ianaTz || 'UTC') + ')' + (e.evidenceId ? '' + e.evidenceId : '') }),
+ e.note ? el('div', { text: e.note }) : null,
+ e.itemValues && Object.keys(e.itemValues).length
+ ? el('div', { class: 'lm', text: 'itemValues: ' + JSON.stringify(e.itemValues) }) : null
+ ])))
+ : emptyNote('No entries yet. Add one via “Custody entry”.');
+ host.appendChild(section('Custody-Log (' + c.custodyLog.length + ')', cusBody)); // Schema change log
+ const chBody = c.schemaChangeLog.length
+ ? el('ul', { class: 'log-list' }, c.schemaChangeLog.map((l) => el('li', { class: 'log-item' }, [
+ el('strong', { text: 'v' + (l.schemaVersion || '?') + ' \u00b7 ' + (l.operator || '') }),
+ el('div', { class: 'lm', text: (l.utc || '') + ' (' + (l.ianaTz || 'UTC') + ')' }),
+ el('div', { text: l.summary })
+ ])))
+ : emptyNote('No changes.');
+ host.appendChild(section('Schema changes / Schema (' + c.schemaChangeLog.length + ')', chBody)); // v0.3 countersignatures (PNG signature images are bound to rootHash / sealHash)
+ const csList = c.countersignList || [];
+ const csBody = csList.length
+ ? el('ul', { class: 'log-list' }, csList.map((cs) => el('li', { class: 'log-item' }, [
+ el('strong', { text: (cs.decision || '') + ' \u00b7 ' + (cs.actorName || '') + (cs.actorTitle ? ' \u00b7 ' + cs.actorTitle : '') }),
+ el('div', { class: 'lm', text: (cs.utc || '') + ' (' + (cs.ianaTz || 'UTC') + ')' }),
+ cs.remark ? el('div', { text: cs.remark }) : null,
+ cs.signatureSha256
+ ? el('div', { class: 'lm', 'data-sig': cs.countersignId, text: 'signature attachment ' + (cs.signatureFile || '') + ' \u00b7 ' + cs.signatureSha256 }) : null
+ ])))
+ : emptyNote('No countersignatures.');
+ host.appendChild(section('Countersignatures (' + csList.length + ')', csBody)); // v0.5 DOM custody / audit timeline (replaces legacy canvas scatter view). Read-only over auditLog / + custodyLog; nodes clickable to reveal full event details. Robust to malformed entries.
+ const auditBody = el('div', {});
+ const auditDetail = el('div', {});
+ let auditCount = ((c.auditLog || []).length) + ((c.custodyLog || []).length);
+ try {
+ renderAuditTimeline(auditBody, c, { detailHost: auditDetail, emptyDetail: 'No audit events.' });
+ } catch (e) {
+ auditBody.appendChild(emptyNote('Timeline not available' + e.message));
+ }
+ host.appendChild(section('Custody & Audit Timeline (' + auditCount + ')', auditBody));
+ host.appendChild(auditDetail);
+ if (c.state === 'draft' || c.state === 'pending_countersign') {
+ host.appendChild(el('div', { class: 'row', style: 'margin-top:8px' }, [
+ el('button', { class: 'btn', text: '+ Forensic Note', onclick: () => doAddHumanNote(c) })
+ ]));
+ } // Integrity
+ const intBody = el('div', {});
+ intBody.appendChild(el('div', { class: 'phase-note', text: c.state === 'sealed'
+ ? 'Sealed: sealHash is authoritative. / sealHash'
+ : 'Draft: sealHash is a preview (DRAFT ONLY), authoritative only after sealing. / sealHash' }));
+ const result = el('div', { id: 'verify-result', style: 'margin:8px 0' });
+ intBody.appendChild(el('button', { class: 'btn', text: 'Verify locally', onclick: () => doVerify(c, result) }));
+ intBody.appendChild(result);
+ host.appendChild(section('Integrity', intBody)); // Actions — disabled controls keep their DOM nodes and carry one uniform tooltip.
+ const locked = c.state === 'sealed';
+ const pending = c.state === 'pending_countersign';
+ const writeBlocked = locked || pending;
+ const reason = locked
+ ? 'Sealed: all writes are permanently disabled.'
+ : 'Awaiting countersign: only countersign records may be appended.';
+ const actBody = el('div', {});
+ const captureHref = './case-capture.html?id=' + encodeURIComponent(c.packageId);
+ const custodyHref = './case-custody.html?id=' + encodeURIComponent(c.packageId);
+ const blockedLink = (href, label) => el('a', {
+ class: 'btn', href, 'aria-disabled': 'true', title: reason, text: label,
+ onclick: (ev) => ev.preventDefault()
+ });
+ actBody.appendChild(el('div', { class: 'row' }, [
+ writeBlocked ? blockedLink(captureHref, '+ Save capture / locked')
+ : el('a', { class: 'btn btn-primary', href: captureHref, text: '+ Save capture' }),
+ writeBlocked ? blockedLink(custodyHref, '+ Custody entry / locked')
+ : el('a', { class: 'btn', href: custodyHref, text: '+ Custody entry' })
+ ])); // Schema Lock (draft only; greyed out during countersign / after sealing)
+ const schemaBtn = el('button', {
+ class: 'btn',
+ text: c.schemaLocked === true ? 'Unlock schema / Schema' : 'Lock schema / Schema',
+ onclick: () => doSchemaLock(c, c.schemaLocked !== true)
+ });
+ if (writeBlocked) { schemaBtn.setAttribute('disabled', ''); schemaBtn.setAttribute('title', reason); }
+ actBody.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, [schemaBtn])); // Encryption: hidden entirely in a non-secure context, with a fixed hint instead.
+ if (!secureContextAvailable()) {
+ actBody.appendChild(el('div', { class: 'phase-note', text: 'Encryption requires a secure context (HTTPS or localhost). No exception is thrown; the main workflow stays usable.' }));
+ } else {
+ const encBtn = el('button', { class: 'btn', text: 'Encrypt case', onclick: () => doEncrypt(c) });
+ const decBtn = el('button', { class: 'btn', text: 'Verify decryption', onclick: () => doDecrypt(c) });
+ const clearBtn = el('button', { class: 'btn', text: 'Remove encryption', onclick: () => doClearEncryption(c) });
+ if (writeBlocked) for (const b of [encBtn, decBtn, clearBtn]) { b.setAttribute('disabled', ''); b.setAttribute('title', reason); }
+ if (!c.caseEncryptionMeta) { decBtn.setAttribute('disabled', ''); decBtn.setAttribute('title', 'No encrypted snapshot stored'); clearBtn.setAttribute('disabled', ''); clearBtn.setAttribute('title', 'No encryption metadata'); }
+ actBody.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, [encBtn, decBtn, clearBtn]));
+ actBody.appendChild(el('div', { class: 'notice', text: 'AES-GCM-256 + PBKDF2-SHA256 (100000). Storage encryption ONLY; it does not replace the sealHash integrity check and is NOT a qualified eIDAS signature.' }));
+ }
+
+ if (c.state === 'pending-configuration') {
+ const sel = el('select', { id: 'supplement-tpl' });
+ for (const [key, tpl] of Object.entries(META_TEMPLATES)) {
+ if (key === 'custom') continue;
+ sel.appendChild(el('option', { value: key, text: tpl.label + ' (' + key + ')' }));
+ }
+ actBody.appendChild(el('div', { class: 'phase-note', text: 'Emergency: media can be secured immediately. Add the schema to switch to draft (sealing stays locked until then).' }));
+ actBody.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Add template' }), sel]));
+ actBody.appendChild(el('button', { class: 'btn btn-primary', text: 'Add schema', onclick: () => doSupplement(c, sel.value, actBody) }));
+ } // Countersign workflow: draft -> pending_countersign -> sealed (one-way)
+ if (c.state === 'draft') {
+ actBody.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, [
+ el('button', { class: 'btn', text: 'Send for countersign', onclick: () => doSendForCountersign(c) })
+ ]));
+ } else {
+ actBody.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, [
+ el('button', { class: 'btn', disabled: true, title: reason, text: 'Send for countersign / locked' })
+ ]));
+ }
+ if (pending) {
+ const csName = el('input', { id: 'cs-name', type: 'text', placeholder: 'Name' });
+ const csTitle = el('input', { id: 'cs-title', type: 'text', placeholder: 'Title' });
+ const csDecision = el('select', { id: 'cs-decision' });
+ for (const d of COUNTERSIGN_DECISIONS) csDecision.appendChild(el('option', { value: d, text: d }));
+ const csRemark = el('textarea', { id: 'cs-remark', rows: '2', placeholder: 'Remark' });
+ const csPad = el('fieldseal-signature-pad', { id: 'cs-pad', 'stroke-width': '2.2' });
+ actBody.appendChild(el('div', { class: 'phase-note', text: 'Only countersign decisions, remarks and hand-drawn signatures may be appended.' }));
+ actBody.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Name' }), csName]));
+ actBody.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Title' }), csTitle]));
+ actBody.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Decision' }), csDecision]));
+ actBody.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Remark' }), csRemark]));
+ actBody.appendChild(el('label', { class: 'field' }, [el('span', { text: 'Hand-drawn signature' }), csPad]));
+ actBody.appendChild(el('button', { class: 'btn btn-primary', text: 'Add countersign', onclick: () => doAddCountersign(c, { csName, csTitle, csDecision, csRemark, csPad }) }));
+ }
+
+ actBody.appendChild(el('div', { class: 'row', style: 'margin-top:12px' }, [
+ el('a', { class: 'btn', href: './case-export.html?id=' + encodeURIComponent(c.packageId), text: 'Export & review panel' }),
+ (c.state === 'draft' || pending)
+ ? el('button', { class: 'btn btn-primary', text: pending ? 'Seal Final' : 'Seal & finalize', onclick: () => doSeal(c) })
+ : el('button', { class: 'btn', disabled: true, title: reason, text: c.state === 'sealed' ? 'Already sealed' : 'Sealing locked' })
+ ]));
+ actBody.appendChild(el('div', { class: 'notice', style: 'margin-top:12px', text: 'Verify the exported case (directory or .zip) with the CLI / CLI:\nnode cli/bin/audit.js case verify <case-dir / case.zip> --json\nsha256sum -c case-files.sha256' }));
+ host.appendChild(section('Actions', actBody));
+ host.appendChild(renderAegisSection(c));
+ renderV04(c, host);
+ loadSignatureImages(c);
+ } // Signature PNGs are attachments (see SPEC-case §). Render them asynchronously from the / local store; the digest shown in the list is already bound to rootHash / sealHash.
+ async function loadSignatureImages(c) {
+ for (const cs of c.countersignList || []) {
+ if (!cs.signatureSha256 || !cs.countersignId) continue;
+ try {
+ const rec = await getSignatureImage(cs.countersignId);
+ const slot = document.querySelector('[data-sig="' + cs.countersignId + '"]');
+ if (!rec || !rec.blob || !slot) continue;
+ slot.textContent = 'signature attachment ' + (cs.signatureFile || '') + ' \u00b7 ' + cs.signatureSha256 + ' ';
+ slot.appendChild(el('img', { class: 'sig-preview', src: URL.createObjectURL(rec.blob), alt: 'Hand-drawn countersignature' }));
+ } catch (_) { /* digest text remains visible */ }
+ }
+ }
+
+ async function doVerify(c, node) {
+ try {
+ const r = await verifyCase(c);
+ node.textContent = '';
+ node.appendChild(el('span', { class: 'verify-result ' + r.coreResult, text: 'coreResult: ' + r.coreResult }));
+ node.appendChild(el('div', { class: 'mono', text: 'sealHash ' + r.sealHash }));
+ node.appendChild(el('div', { class: 'mono', text: 'rootHash ' + r.rootHash }));
+ if (r.errors && r.errors.length) node.appendChild(el('div', { text: 'errors: ' + r.errors.join('; ') }));
+ showToast('Verified locally' + r.coreResult, r.coreResult === 'ok' ? 'ok' : 'error');
+ } catch (e) {
+ showToast('Verification failed' + e.message, 'error');
+ }
+ }
+
+ async function doSupplement(c, metaTemplate, actBody) {
+ if (!available()) { showToast('IndexedDB not available', 'error'); return; }
+ try {
+ const updated = await supplementSchema(c, { metaTemplate, ianaTz: 'UTC', operator: 'operator' });
+ await putCase(updated);
+ showToast('Schema supplemented', 'ok');
+ location.reload();
+ } catch (e) {
+ showToast('Supplement failed' + e.message, 'error');
+ }
+ }
+
+ function tzIana() {
+ try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; }
+ } // expectedRootHash enables optimistic concurrency control: a second tab that already changed / the case is refused instead of silently overwriting the first tab's countersign.
+ async function saveAndReload(next, okMessage, expectedRootHash) {
+ if (!available()) throw new Error('IndexedDB not available');
+ if (expectedRootHash) await putCaseIfUnchanged(next, expectedRootHash);
+ else await putCase(next);
+ showToast(okMessage, 'ok');
+ location.reload();
+ }
+
+ function pngBytesFromDataUrl(dataUrl) {
+ if (!dataUrl) return null;
+ const prefix = 'data:image/png;base64,';
+ if (!dataUrl.startsWith(prefix)) throw new Error('signature must be a PNG data URL');
+ const raw = atob(dataUrl.slice(prefix.length));
+ if (raw.length > MAX_SIGNATURE_BYTES) throw new Error('signature exceeds ' + MAX_SIGNATURE_BYTES + 'bytes');
+ const bytes = new Uint8Array(raw.length);
+ for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+ return bytes;
+ } // Reusable trilingual, checkbox-gated confirmation for every state-changing action.
+ function gatedDialog(opts) {
+ return new Promise((resolve) => {
+ const overlay = el('div', { class: 'dialog-overlay' });
+ const confirmBtn = el('button', { class: 'btn btn-primary', text: opts.confirmText, disabled: true });
+ const check = el('input', { type: 'checkbox' });
+ check.addEventListener('change', () => { confirmBtn.disabled = !check.checked; });
+ const rows = el('dl', { class: 'kv' });
+ for (const [k, v] of opts.rows || []) {
+ rows.appendChild(el('dt', { text: k }));
+ rows.appendChild(el('dd', { text: v }));
+ }
+ const close = (value) => { overlay.remove(); resolve(value); };
+ const body = [el('h3', { text: opts.title })];
+ for (const note of opts.notes || []) body.push(el('p', { text: note }));
+ body.push(rows);
+ body.push(el('label', { class: 'check' }, [check, el('span', { text: 'I understand the effect of this action.' })]));
+ body.push(el('div', { class: 'dialog-actions' }, [
+ el('button', { class: 'btn btn-ghost', text: 'Cancel', onclick: () => close(false) }),
+ confirmBtn
+ ]));
+ confirmBtn.addEventListener('click', () => close(true));
+ overlay.appendChild(el('div', { class: 'dialog' }, body));
+ document.body.appendChild(overlay);
+ });
+ } // Passphrase lives only in this closure; it is never written to the case, IndexedDB or storage.
+ function passwordDialog(opts) {
+ return new Promise((resolve) => {
+ const overlay = el('div', { class: 'dialog-overlay' });
+ const p1 = el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Passphrase' });
+ const p2 = opts.confirm ? el('input', { type: 'password', autocomplete: 'new-password', placeholder: 'Repeat passphrase' }) : null;
+ const err = el('div', { class: 'hint' });
+ const ok = el('button', { class: 'btn btn-primary', text: opts.confirmText });
+ const close = (value) => { overlay.remove(); resolve(value); };
+ ok.addEventListener('click', () => {
+ if (!p1.value) { err.textContent = 'Passphrase must not be empty.'; return; }
+ if (p2 && p1.value !== p2.value) { err.textContent = 'Passphrases do not match.'; return; }
+ close(p1.value);
+ });
+ const body = [
+ el('h3', { text: opts.title }),
+ el('p', { text: 'The passphrase is never stored and cannot be recovered.' }),
+ el('label', { class: 'field' }, [el('span', { text: 'Passphrase' }), p1])
+ ];
+ if (p2) body.push(el('label', { class: 'field' }, [el('span', { text: 'Confirmation' }), p2]));
+ body.push(err);
+ body.push(el('div', { class: 'dialog-actions' }, [
+ el('button', { class: 'btn btn-ghost', text: 'Cancel', onclick: () => close(null) }), ok
+ ]));
+ overlay.appendChild(el('div', { class: 'dialog' }, body));
+ document.body.appendChild(overlay);
+ });
+ }
+
+ async function doSchemaLock(c, locked) {
+ const ok = await gatedDialog({
+ title: 'Schema ' + (locked ? 'sperren' : 'entsperren') + '?',
+ notes: [
+ 'Locked schemas can no longer be changed or supplemented.',
+ 'A locked schema can no longer be changed or supplemented.',
+ 'Schema / sealHash'
+ ],
+ rows: [['Schema version', String(c.schemaDef.version)], ['Timestamp (UTC)', isoUtcNow()]],
+ confirmText: locked ? 'Lock' : 'Unlock'
+ });
+ if (!ok) return;
+ try {
+ await saveAndReload(await setSchemaLocked(c, locked, { ianaTz: tzIana(), note: locked ? 'Schema locked' : 'Schema unlocked' }),
+ locked ? 'Schema locked' : 'Schema unlocked');
+ } catch (e) { showToast('Schema-Lock failed' + e.message, 'error'); }
+ }
+
+ async function doEncrypt(c) {
+ if (!secureContextAvailable()) { showToast('Secure context required', 'warn'); return; }
+ const pass = await passwordDialog({ confirm: true, title: 'Encrypt case', confirmText: 'Encrypt' });
+ if (!pass) return;
+ try {
+ const { blob, meta } = await encryptCaseArchive(c, pass);
+ await putCaseCipher({ packageId: c.packageId, caseId: c.packageId, blob, createdAt: isoUtcNow() });
+ await saveAndReload(await setCaseEncryption(c, meta, { ianaTz: tzIana(), note: 'Storage encryption enabled' }),
+ 'Encrypted sealHash');
+ } catch (e) { showToast('Encryption failed: ' + e.message, 'error'); }
+ }
+
+ async function doDecrypt(c) {
+ if (!c.caseEncryptionMeta) { showToast('No encrypted archive', 'warn'); return; }
+ const pass = await passwordDialog({ confirm: false, title: 'Verify decryption', confirmText: 'Decrypt' });
+ if (!pass) return;
+ try {
+ const rec = await getCaseCipher(c.packageId);
+ if (!rec || !rec.blob) throw new Error('No encrypted snapshot');
+ const bytes = new Uint8Array(await rec.blob.arrayBuffer());
+ const r = await classifyCipherResult(c, bytes, c.caseEncryptionMeta, pass, verifyCase);
+ if (r.coreResult === 'tampered') { showToast('CIPHER_TAMPERED' + r.reason, 'error'); return; }
+ if (r.coreResult === 'invalid_passphrase') { showToast(r.message, 'error'); return; }
+ const plain = r.plain;
+ await saveAndReload(await appendAuditEvent(c, 'CASE_DECRYPT', { verified: true, snapshotRootHash: plain.rootHash }, { ianaTz: tzIana(), note: 'Decryption verified' }),
+ 'Decryption successful / rootHash' + plain.rootHash);
+ } catch (e) { showToast(e.message, 'error'); }
+ }
+
+ async function doClearEncryption(c) {
+ const ok = await gatedDialog({
+ title: 'Remove encryption?',
+ notes: [
+ 'The encrypted copy and its metadata will be removed.',
+ 'The encrypted copy and its metadata are removed.',
+ 'CASE_DECRYPT'
+ ],
+ rows: [['Algorithmus', (c.caseEncryptionMeta && c.caseEncryptionMeta.algorithm) || 'none']],
+ confirmText: 'Remove'
+ });
+ if (!ok) return;
+ try {
+ await deleteCaseCipher(c.packageId);
+ await saveAndReload(await clearCaseEncryption(c, { ianaTz: tzIana(), note: 'Encryption removed' }), 'Encryption removed');
+ } catch (e) { showToast('Remove failed' + e.message, 'error'); }
+ }
+
+ async function doSendForCountersign(c) {
+ const ok = await gatedDialog({
+ title: 'Send for countersign?',
+ notes: [
+ 'The case moves one-way to pending_countersign. Captures, schema and custody log become read-only.',
+ 'The case moves one-way to pending_countersign. Captures, schema and custody log become read-only.',
+ 'Schema'
+ ],
+ rows: [['Captures', String(c.children.length)], ['Timestamp (UTC)', isoUtcNow()]],
+ confirmText: 'Senden'
+ });
+ if (!ok) return;
+ try {
+ await saveAndReload(await sendForCountersign(c, { ianaTz: tzIana(), note: 'Sent for countersign' }), 'Sent for countersign');
+ } catch (e) { showToast('Senden failed' + e.message, 'error'); }
+ }
+
+ async function doAddCountersign(c, f) {
+ const name = (f.csName.value || '').trim();
+ if (!name) { showToast('Name required', 'warn'); return; } // addCountersign mutates and rehashes `c` in place, so the optimistic-concurrency / baseline must be captured BEFORE the mutation, otherwise the check compares the / brand-new rootHash against the stored one and always reports STALE_CASE.
+ const expectedRootHash = c.rootHash;
+ try {
+ const signature = f.csPad && typeof f.csPad.value === 'string' ? f.csPad.value : '';
+ const bytes = pngBytesFromDataUrl(signature);
+ let signatureSha256 = null;
+ let countersignId = null;
+ if (bytes) {
+ signatureSha256 = await sha256Uri(bytes);
+ countersignId = globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function'
+ ? globalThis.crypto.randomUUID() : ('sig-' + Date.now().toString(36));
+ await putSignatureImage({
+ packageId: countersignId, caseId: c.packageId,
+ blob: new Blob([bytes], { type: 'image/png' }), createdAt: isoUtcNow()
+ });
+ }
+ const next = await addCountersign(c, {
+ countersignId,
+ actorName: name,
+ actorTitle: (f.csTitle.value || '').trim(),
+ decision: f.csDecision.value,
+ remark: (f.csRemark.value || '').trim(),
+ signatureSha256
+ }, { ianaTz: tzIana(), note: 'Countersign recorded' });
+ await saveAndReload(next, 'Countersignature saved', expectedRootHash);
+ } catch (e) { showToast('Countersignature failed' + e.message, 'error'); }
+ } // Deliberate, bilingual, checkbox-gated confirmation: sealing is irreversible.
+ function sealConfirmDialog(c) {
+ return new Promise((resolve) => {
+ const overlay = el('div', { class: 'dialog-overlay' });
+ const confirmBtn = el('button', { class: 'btn btn-primary', text: 'Seal irrevocably', disabled: true });
+ const check = el('input', { type: 'checkbox', id: 'seal-understand' });
+ const warn = el('div', { class: 'notice' }, [
+ el('strong', { text: 'WARNING' }),
+ el('p', { text: 'Sealing is irreversible. Afterward the schema, captures, custody log and audit log are permanently locked; any later change invalidates verification (tampered).' }),
+ el('p', { text: 'Schema, captures, custody log and audit log become permanently locked; any later modification fails verification (tampered).' })
+ ]);
+ const risk = el('p', { class: 'hint' }, [
+ el('span', { text: 'NOT a qualified eIDAS signature; no guarantee of admissibility; device time and GPS may be altered.' })
+ ]);
+ const summary = el('dl', { class: 'kv' }, [
+ el('dt', { text: 'Captures' }), el('dd', { text: String(c.children.length) }),
+ el('dt', { text: 'Custody entries' }), el('dd', { text: String(c.custodyLog.length) }),
+ el('dt', { text: 'Schema version' }), el('dd', { text: String(c.schemaDef.version) }),
+ el('dt', { text: 'Timestamp (UTC)' }), el('dd', { class: 'mono', text: isoUtcNow() })
+ ]);
+ check.addEventListener('change', () => { confirmBtn.disabled = !check.checked; });
+ const close = (value) => { overlay.remove(); resolve(value); };
+ confirmBtn.addEventListener('click', () => close(true));
+ const box = el('div', { class: 'dialog' }, [
+ el('h3', { text: 'Seal case?' }),
+ warn,
+ summary,
+ el('label', { class: 'check' }, [check, el('span', { text: 'I understand sealing cannot be undone.' })]),
+ risk,
+ el('div', { class: 'dialog-actions' }, [
+ el('button', { class: 'btn btn-ghost', text: 'Cancel', onclick: () => close(false) }),
+ confirmBtn
+ ])
+ ]);
+ overlay.appendChild(box);
+ document.body.appendChild(overlay);
+ });
+ }
+
+ async function doSeal(c) {
+ if (c.state !== 'draft' && c.state !== 'pending_countersign') { showToast('Only a draft or pending countersignature can be sealed', 'warn'); return; }
+ if (!available()) { showToast('IndexedDB not available', 'error'); return; }
+ if (!(await sealConfirmDialog(c))) return;
+ try {
+ const tz = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { return 'UTC'; } })();
+ const sealed = await sealCase(c, { actorName: 'custodian', ianaTz: tz, note: 'Case sealed & finalized' });
+ await putCase(sealed);
+ showToast('Case sealed', 'ok');
+ location.reload();
+ } catch (e) {
+ showToast('Sealing failed' + e.message, 'error');
+ }
+ } // --- v0.4 UI (§) ---------------------------------------------------------
+ const V04_UNSUPPORTED = 'v0.4 / This case version does not support v0.4 features / Diese Case-Version unterstuetzt v0.4 not';
+
+ async function v04Commit(next, msg) {
+ if (!available()) throw new Error('IndexedDB not available');
+ await putCase(next);
+ showToast(msg, 'ok');
+ location.reload();
+ } // Backup / quota dialogs. A browser CANNOT silently write to disk: every one-click backup is a / user-confirmed DOWNLOAD and never mutates the main case. Both dialogs are manually openable so / UI availability can be checked without waiting for the 30-minute timer or a low-quota device.
+ function actionDialog(opts) {
+ return new Promise((resolve) => {
+ const overlay = el('div', { class: 'dialog-overlay' });
+ const actions = el('div', { class: 'dialog-actions' });
+ const dialog = el('div', { class: 'dialog' }, [
+ el('h3', { text: opts.title }),
+ ...(opts.notes || []).map((n) => el('p', { text: n })),
+ opts.body || null
+ ]);
+ for (const b of opts.buttons || []) {
+ actions.appendChild(el('button', {
+ class: 'btn ' + (b.primary ? 'btn-primary' : 'btn-ghost'),
+ text: b.text,
+ onclick: () => { overlay.remove(); resolve(b.value); }
+ }));
+ }
+ dialog.appendChild(actions);
+ overlay.appendChild(dialog);
+ document.body.appendChild(overlay);
+ });
+ } // BagIt / OAIS long-term archival export. Produces a BagIt v1.0 .zip (metadata + evidence binaries + / fixity manifests). The case rootHash/sealHash are recorded in bag-info.txt and remain authoritative; // BagIt is a packaging wrapper, NOT a re-seal. Offline verify: `node cli/bagit-tool.mjs verify <dir>` / after unzipping, or buildBagitZip's verifyBagitFiles in code.
+ async function doBagitExport(c) {
+ try {
+ requireApproval(c, 'export'); // multi-control gate (no-op unless a policy requires 'export')
+ const recs = await listEvidencePackages(c.packageId);
+ const packages = recs.map((r) => ({ packageId: r.packageId, blob: r.blob }));
+ const blob = await buildBagitZip(c, packages, {});
+ const name = 'case-' + c.packageId.slice(0, 8) + '-bagit.zip';
+ downloadBlob(blob, name);
+ showToast('BagIt archive exported', 'ok');
+ } catch (e) { showToast('BagIt-Export failed' + e.message, 'error'); }
+ }
+
+ async function openBackupDialog(c) {
+ const choice = await actionDialog({
+ title: 'Local backup reminder',
+ notes: [
+ BACKUP_BROWSER_LIMIT,
+ 'One-click export downloads the current case package. The main case and its hashes are never modified.'
+ ],
+ buttons: [
+ { text: 'Spaeter', value: 'later' },
+ { text: 'Jetzt exportieren', value: 'export', primary: true }
+ ]
+ });
+ if (choice !== 'export') { showToast('Backup reminder dismissed', 'info'); return; }
+ try {
+ requireApproval(c, 'export'); // multi-control gate (no-op unless a policy requires 'export')
+ const recs = await listEvidencePackages(c.packageId);
+ const packages = recs.map((r) => ({ packageId: r.packageId, blob: r.blob }));
+ const blob = await buildCaseExportZip(c, packages, {});
+ downloadBlob(blob, caseExportFileName(c));
+ showToast('Local backup exported', 'ok');
+ } catch (e) { showToast('Backup failed' + e.message, 'error'); }
+ }
+
+ async function openQuotaDialog() {
+ const est = await estimateQuota().catch(() => ({ supported: false, usage: 0, quota: 0, freeRatio: 1, warning: false }));
+ const warn = quotaWarningText(est);
+ await actionDialog({
+ title: 'Local storage quota',
+ notes: [
+ 'navigator.storage.estimate(): ' + (est.supported ? 'available' : 'not available (friendly degradation, no exception)'),
+ 'usage ' + est.usage + ' B / quota ' + est.quota + ' B / free ' + (est.freeRatio * 100).toFixed(1) + '%',
+ warn || 'No quota warning. Evidence packages are written verbatim and are NEVER blocked by a low-quota warning.',
+ BACKUP_BROWSER_LIMIT
+ ],
+ buttons: [{ text: 'Close', value: 'close', primary: true }]
+ });
+ showToast(warn ? 'Quota warning acknowledged' : 'Quota check complete', warn ? 'warn' : 'ok');
+ } // Aegis anchoring hook — optional, OFF by default, UI-only. It never blocks sealing, / export or hashing. The toggle and target URL persist in localStorage (never in the / case manifest), so enabling it does not change rootHash / manifest / the evidence ZIP.
+ function renderAegisSection(c) {
+ const cfg = loadAegisConfig();
+ const sealed = c.state === 'sealed';
+ const toggle = el('input', { id: 'aegis-enable', type: 'checkbox' });
+ toggle.checked = !!cfg.enabled;
+ const urlInput = el('input', {
+ id: 'aegis-url', type: 'text', class: 'input',
+ placeholder: 'Aegis POST target (https)',
+ value: cfg.url || ''
+ });
+ const pushBtn = el('button', {
+ class: 'btn btn-primary', id: 'aegis-push',
+ text: 'Send hash digest',
+ onclick: () => doAegisPush(c, toggle, urlInput)
+ });
+ if (!sealed) {
+ pushBtn.setAttribute('disabled', '');
+ pushBtn.setAttribute('title', 'Available only after sealing.');
+ }
+ const body = el('div', {}, [
+ el('p', { class: 'notice', text: 'Aegis is an external, independent anchoring service. Only the hash string is sent, no original files. / Aegis' }),
+ el('label', { class: 'field' }, [
+ el('span', { text: 'Enable Aegis hash anchor' }),
+ toggle
+ ]),
+ el('label', { class: 'field' }, [
+ el('span', { text: 'Aegis target URL (POST)' }),
+ urlInput
+ ]),
+ el('div', { class: 'row', style: 'margin-top:12px' }, [pushBtn])
+ ]);
+ return section('Aegis hash anchor', body);
+ }
+
+ async function doAegisPush(c, toggle, urlInput) {
+ const enabled = toggle.checked === true;
+ const url = (urlInput.value || '').trim();
+ saveAegisConfig({ enabled, url });
+ if (!enabled) {
+ showToast('Aegis disabled: no upload.', 'info');
+ return;
+ }
+ if (!url) {
+ showToast('Please enter the Aegis target URL.', 'warn');
+ return;
+ }
+ showToast('Submitting hash to Aegis ...', 'info');
+ const result = await pushHashToAegis({
+ packageId: c.packageId,
+ specVersion: c.specVersion || SPEC_VERSION_V04,
+ rootHash: c.rootHash
+ }, url);
+ if (result.ok) {
+ showToast('Hash submitted to Aegis successfully.', 'info');
+ } else {
+ showToast('Submission failed. Evidence remains unchanged locally.', 'error');
+ }
+ } // --- v0.5 operator identity / forensic notes / exhibit tags (UI) -------------------------
+
+ function renderOperatorSection(c) {
+ const op = c.caseMeta && c.caseMeta.operatorProfile;
+ const body = el('div', {});
+ if (op) {
+ body.appendChild(el('dl', { class: 'kv' }, [
+ el('dt', { text: 'Name' }), el('dd', { text: op.operatorName || '' }),
+ el('dt', { text: 'Title' }), el('dd', { text: op.operatorTitle || '' }),
+ el('dt', { text: 'Org' }), el('dd', { text: op.orgId || '' }),
+ el('dt', { text: 'Operator ID' }), el('dd', { class: 'mono', text: op.operatorId || '' })
+ ]));
+ } else {
+ body.appendChild(el('div', { class: 'section-empty', text: 'No operator bound.' }));
+ } // v0.5 additive, NON-trust operator identity (operatorIdentity). Audit-only metadata; excluded from / rootHash / sealHash. Never a substitute for a signature or trust root.
+ const oi = c.caseMeta && c.caseMeta.operatorIdentity;
+ body.appendChild(el('div', { class: 'subhead', text: 'Operator Identity (additive, non-trust)' }));
+ if (oi) {
+ body.appendChild(el('dl', { class: 'kv' }, [
+ el('dt', { text: 'Operator ID' }), el('dd', { class: 'mono', text: oi.operatorId || '' }),
+ el('dt', { text: 'Full name' }), el('dd', { text: oi.fullName || '' }),
+ el('dt', { text: 'Badge ID' }), el('dd', { class: 'mono', text: oi.badgeId || '' }),
+ el('dt', { text: 'Org' }), el('dd', { text: oi.org || '' }),
+ el('dt', { text: 'Role' }), el('dd', { text: oi.role || '' }),
+ el('dt', { text: 'Contact ref' }), el('dd', { text: oi.contactRef || '' }),
+ el('dt', { text: 'Signature fingerprint' }), el('dd', { class: 'mono', text: oi.signatureFingerprint || '' })
+ ]));
+ } else {
+ body.appendChild(el('div', { class: 'section-empty', text: 'No add-on identity.' }));
+ }
+ const canBind = c.state === 'draft' || c.state === 'pending_countersign';
+ if (canBind) {
+ body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, [
+ el('button', { class: 'btn', text: op ? 'Change operator' : 'Bind operator', onclick: () => doBindOperator(c) }),
+ el('button', { class: 'btn btn-ghost', text: 'Manage profiles', onclick: () => doManageProfiles(c) }),
+ el('button', { class: 'btn', text: oi ? 'Change identity' : 'Bind identity', onclick: () => doBindOperatorIdentity(c) }),
+ el('button', { class: 'btn btn-ghost', text: 'Identity templates', onclick: () => doManageIdentities(c) })
+ ]));
+ }
+ return section('Operator', body);
+ }
+
+ async function doBindOperator(c) {
+ const profiles = loadOperatorProfiles();
+ const sel = el('select', {});
+ sel.appendChild(el('option', { value: '', text: 'Select' }));
+ for (const p of profiles) sel.appendChild(el('option', { value: p.operatorId, text: p.operatorId + ' \u2014 ' + p.operatorName }));
+ const name = el('input', { type: 'text', placeholder: 'Name' });
+ const title = el('input', { type: 'text', placeholder: 'Title' });
+ const org = el('input', { type: 'text', placeholder: 'Org ID' });
+ const id = el('input', { type: 'text', placeholder: 'Operator ID' });
+ const prefill = (pid) => { const p = profiles.find((x) => x.operatorId === pid); if (p) { name.value = p.operatorName; title.value = p.operatorTitle; org.value = p.orgId; id.value = p.operatorId; } };
+ sel.onchange = () => prefill(sel.value);
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'Saved profile' }), sel]),
+ el('label', { class: 'field' }, [el('span', { text: 'Name' }), name]),
+ el('label', { class: 'field' }, [el('span', { text: 'Title' }), title]),
+ el('label', { class: 'field' }, [el('span', { text: 'Org ID' }), org]),
+ el('label', { class: 'field' }, [el('span', { text: 'Operator ID' }), id])
+ ]);
+ const choice = await actionDialog({
+ title: 'Bind operator',
+ notes: ['Local identity attestation by the operator; not a CA certificate.'],
+ body: form,
+ buttons: [
+ { text: 'Cancel', value: 'cancel' },
+ { text: 'Save & bind', value: 'ok', primary: true }
+ ]
+ });
+ if (choice !== 'ok') return;
+ const operatorId = id.value.trim();
+ if (!operatorId) { showToast('Operator ID required', 'warn'); return; }
+ const profile = { operatorId, operatorName: name.value.trim(), operatorTitle: title.value.trim(), orgId: org.value.trim() };
+ upsertOperatorProfile(profile);
+ try {
+ const next = await bindOperatorProfile(c, profile);
+ await v04Commit(next, 'Operator bound');
+ } catch (e) { showToast('Binding failed' + e.message, 'error'); }
+ }
+
+ async function doManageProfiles(c) {
+ const profiles = loadOperatorProfiles();
+ const listEl = el('ul', { class: 'log-list' }, profiles.length ? profiles.map((p) => el('li', { class: 'log-item' }, [
+ el('strong', { text: p.operatorId + ' \u2014 ' + p.operatorName }),
+ el('div', { class: 'lm', text: (p.operatorTitle || '') + ' \u00b7 ' + (p.orgId || '') }),
+ el('button', { class: 'btn btn-ghost', text: 'Delete', onclick: () => { deleteOperatorProfile(p.operatorId); showToast('Profile deleted', 'ok'); doManageProfiles(c); } })
+ ])) : [el('li', { class: 'log-item', text: 'No profiles.' })]);
+ await actionDialog({ title: 'Manage profiles', body: listEl, buttons: [{ text: 'Close', value: 'close', primary: true }] });
+ } // v0.5 operatorIdentity (additive, non-trust metadata). Bound into caseMeta.operatorIdentity (excluded / from rootHash / sealHash). Audit-only; never a substitute for a signature or trust root.
+ async function doBindOperatorIdentity(c) {
+ const identities = loadOperatorIdentities();
+ const sel = el('select', {});
+ sel.appendChild(el('option', { value: '', text: 'Manual' }));
+ for (const id of identities) sel.appendChild(el('option', { value: id.operatorId, text: id.operatorId + ' \u2014 ' + (id.fullName || '') }));
+ const f = (id, ph) => el('input', { type: 'text', id: 'oi-' + id, placeholder: ph, value: (c.caseMeta && c.caseMeta.operatorIdentity && c.caseMeta.operatorIdentity[id]) || '' });
+ const form = el('div', { class: 'field', id: 'oi-form' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'Template' }), sel]),
+ el('label', { class: 'field' }, [el('span', { text: 'Operator ID' }), f('operatorId', 'OP-1001')]),
+ el('label', { class: 'field' }, [el('span', { text: 'Full name' }), f('fullName', 'Yesne Doe')]),
+ el('label', { class: 'field' }, [el('span', { text: 'Badge ID' }), f('badgeId', '')]),
+ el('label', { class: 'field' }, [el('span', { text: 'Org' }), f('org', '')]),
+ el('label', { class: 'field' }, [el('span', { text: 'Role' }), f('role', '')]),
+ el('label', { class: 'field' }, [el('span', { text: 'Contact ref' }), f('contactRef', '')]),
+ el('label', { class: 'field' }, [el('span', { text: 'Signature fingerprint' }), f('signatureFingerprint', '')])
+ ]);
+ sel.addEventListener('change', () => {
+ const tpl = identities.find((x) => x.operatorId === sel.value);
+ if (tpl) for (const k of ['operatorId', 'fullName', 'badgeId', 'org', 'role', 'contactRef', 'signatureFingerprint']) { const i = $('oi-' + k); if (i) i.value = tpl[k] || ''; }
+ });
+ const choice = await actionDialog({
+ title: 'Operator Bind identity',
+ notes: ['Available only in draft or pending countersign; locked after sealing. Additive, non-trust metadata; excluded from rootHash / sealHash.'],
+ body: form,
+ buttons: [
+ { text: 'Cancel', value: 'cancel' },
+ { text: 'Save', value: 'ok', primary: true }
+ ]
+ });
+ if (choice !== 'ok') return;
+ const id = {};
+ for (const k of ['operatorId', 'fullName', 'badgeId', 'org', 'role', 'contactRef', 'signatureFingerprint']) { const v = $('oi-' + k).value.trim(); if (v) id[k] = v; }
+ if (!id.operatorId) { showToast('Operator ID required', 'warn'); return; }
+ try {
+ const next = await bindOperatorIdentity(c, id);
+ await v04Commit(next, 'Operator identity bound');
+ } catch (e) { showToast('Binding failed' + e.message, 'error'); }
+ }
+
+ async function doManageIdentities(c) {
+ const identities = loadOperatorIdentities();
+ const listEl = el('ul', { class: 'log-list' }, identities.length ? identities.map((p) => el('li', { class: 'log-item' }, [
+ el('strong', { text: p.operatorId + ' \u2014 ' + (p.fullName || '') }),
+ el('div', { class: 'lm', text: (p.org || '') + ' \u00b7 ' + (p.role || '') }),
+ el('button', { class: 'btn btn-ghost', text: 'Delete', onclick: () => { deleteOperatorIdentity(p.operatorId); showToast('Template deleted', 'ok'); doManageIdentities(c); } })
+ ])) : [el('li', { class: 'log-item', text: 'No templates.' })]);
+ await actionDialog({ title: 'Identity templates', body: listEl, buttons: [{ text: 'Close', value: 'close', primary: true }] });
+ } // v0.5 humanNotes (additive, non-trust metadata, caseMeta.humanNotes). Append-only; field notes frozen / after seal, audit notes allowed only after seal. Never edits history; not part of any hash.
+ function renderHumanNotesSection(c) {
+ const notes = (c.caseMeta && Array.isArray(c.caseMeta.humanNotes)) ? c.caseMeta.humanNotes : [];
+ const body = el('div', {});
+ if (notes.length) {
+ body.appendChild(el('ul', { class: 'log-list' }, notes.map((n) => el('li', { class: 'log-item' }, [
+ el('div', { class: 'lt' }, [el('strong', { text: (n.noteType === 'field' ? 'Field' : 'Audit') }), el('span', { class: 'ts', text: '' + (n.createdAt || '') })]),
+ el('div', { class: 'lm', text: n.content || '' }),
+ n.authorOperatorId ? el('div', { class: 'lm', text: 'Author' + n.authorOperatorId }) : null
+ ].filter(Boolean)))));
+ } else {
+ body.appendChild(emptyNote('No notes.'));
+ }
+ const sealed = c.state === 'sealed';
+ const canField = c.state === 'draft' || c.state === 'pending_countersign';
+ const row = el('div', { class: 'row', style: 'margin-top:10px' });
+ if (canField) row.appendChild(el('button', { class: 'btn', text: 'Field note', onclick: () => doAddHumanNoteMeta(c, 'field') }));
+ if (sealed) row.appendChild(el('button', { class: 'btn', text: 'Audit note', onclick: () => doAddHumanNoteMeta(c, 'audit') }));
+ if (canField || sealed) body.appendChild(row);
+ return section('Human Notes', body);
+ }
+
+ async function doAddHumanNoteMeta(c, noteType) {
+ const text = el('textarea', { rows: '4', placeholder: 'Context note / : scene, witness, consent, review finding...' });
+ const author = el('input', { type: 'text', placeholder: 'Operator ID / optional' });
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'Note' }), text]),
+ el('label', { class: 'field' }, [el('span', { text: 'Author Operator ID' }), author])
+ ]);
+ const choice = await actionDialog({
+ title: (noteType === 'field' ? 'Field note' : 'Audit note'),
+ notes: noteType === 'field'
+ ? ['Available only in draft or pending countersign; locked after sealing.']
+ : ['Available only after sealing; existing notes are never changed.'],
+ body: form,
+ buttons: [
+ { text: 'Cancel', value: 'cancel' },
+ { text: 'Add', value: 'ok', primary: true }
+ ]
+ });
+ if (choice !== 'ok') return;
+ const content = text.value.trim();
+ if (!content) { showToast('Note required', 'warn'); return; }
+ try {
+ const next = await addHumanNoteMeta(c, { noteType, content, authorOperatorId: author.value.trim() });
+ await v04Commit(next, 'Human note added');
+ } catch (e) { showToast('Add failed' + e.message, 'error'); }
+ } // v0.5 RFC3161 trusted timestamp (optional, out-of-trust-chain). Anchors the case rootHash at a TSA; // stored additive (excluded from hashes). CA-chain signature verification is out-of-kernel. Graceful / offline degradation: a failed/pending request is recorded, sealing/export never blocked. / --- v0.5 Lawful basis / consent record (HASH-BOUND, see bindConsentRecord) ---------------------
+ function renderConsentSection(c) {
+ const rec = c.caseMeta && c.caseMeta.consentRecord;
+ const body = el('div', {});
+ if (rec) {
+ body.appendChild(el('dl', { class: 'kv' }, [
+ el('dt', { text: 'Basis' }), el('dd', { text: rec.basis || '' }),
+ el('dt', { text: 'Authority ref' }), el('dd', { class: 'mono', text: rec.authorityRef || '' }),
+ el('dt', { text: 'Consent by' }), el('dd', { text: rec.consentBy || '' }),
+ el('dt', { text: 'Detail' }), el('dd', { text: rec.basisDetail || '' }),
+ el('dt', { text: 'Noted at' }), el('dd', { class: 'mono', text: rec.notedAt || '' }),
+ el('dt', { text: 'Operator' }), el('dd', { class: 'mono', text: rec.operatorId || '' })
+ ]));
+ } else {
+ body.appendChild(el('div', { class: 'section-empty', text: 'No consent record.' }));
+ }
+ const canEdit = c.state === 'draft' || c.state === 'pending_countersign';
+ if (canEdit) body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, [
+ el('button', { class: 'btn', text: rec ? 'Change consent' : 'Record consent', onclick: () => doBindConsent(c) })
+ ]));
+ return section('Consent / Lawful Basis', body);
+ }
+
+ async function doBindConsent(c) {
+ const BASIS = ['consent', 'legalCompulsion', 'publicInterest', 'contractual', 'vitalInterest', 'other'];
+ const sel = el('select', {});
+ sel.appendChild(el('option', { value: '', text: 'Basis waehlen' }));
+ for (const b of BASIS) sel.appendChild(el('option', { value: b, text: b }));
+ const cur = c.caseMeta && c.caseMeta.consentRecord;
+ if (cur && cur.basis) sel.value = cur.basis;
+ const auth = el('input', { type: 'text', placeholder: 'Warrant / subpoena / statute ref', value: (cur && cur.authorityRef) || '' });
+ const by = el('input', { type: 'text', placeholder: 'Name of data subject / authorized person', value: (cur && cur.consentBy) || '' });
+ const det = el('textarea', { rows: '3', placeholder: 'Detail', text: (cur && cur.basisDetail) || '' });
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'Lawful basis' }), sel]),
+ el('label', { class: 'field' }, [el('span', { text: 'Authority ref' }), auth]),
+ el('label', { class: 'field' }, [el('span', { text: 'Consent by' }), by]),
+ el('label', { class: 'field' }, [el('span', { text: 'Detail' }), det])
+ ]);
+ const choice = await actionDialog({
+ title: 'Consent / Record',
+ notes: ['Available only in draft or pending countersign; locked after sealing. Hash-bound; post-seal manipulation = tampered.'],
+ body: form,
+ buttons: [{ text: 'Cancel', value: 'cancel' }, { text: 'Save', value: 'ok', primary: true }]
+ });
+ if (choice !== 'ok') return;
+ const basis = sel.value;
+ if (!basis) { showToast('Basis required', 'warn'); return; }
+ try {
+ const next = await bindConsentRecord(c, { basis, authorityRef: auth.value.trim(), consentBy: by.value.trim(), basisDetail: det.value.trim() });
+ await v04Commit(next, 'Consent recorded');
+ } catch (e) { showToast('Failed' + e.message, 'error'); }
+ } // --- v0.5 Affidavit / sworn declaration (HASH-BOUND, see bindAffidavit) --------------------------
+ function renderAffidavitSection(c) {
+ const af = c.caseMeta && c.caseMeta.affidavit;
+ const body = el('div', {});
+ if (af) {
+ body.appendChild(el('div', { class: 'lm', text: 'Declarant' + (af.declarant || '') + (af.declarantTitle ? '' + af.declarantTitle : '') }));
+ body.appendChild(el('div', { class: 'lm', text: 'Jurisdiction' + (af.jurisdiction || '') + 'Declared' + (af.declaredAt || '') }));
+ body.appendChild(el('ol', { class: 'log-list' }, (af.statements || []).map((s) => el('li', { class: 'log-item', text: s }))));
+ } else {
+ body.appendChild(el('div', { class: 'section-empty', text: 'No sworn statement.' }));
+ }
+ const canEdit = c.state === 'draft' || c.state === 'pending_countersign';
+ if (canEdit) body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, [
+ el('button', { class: 'btn', text: af ? 'Change affidavit' : 'Create affidavit', onclick: () => doBindAffidavit(c) })
+ ]));
+ return section('Eidesstattliche Erklaerung / Affidavit', body);
+ }
+
+ async function doBindAffidavit(c) {
+ const name = el('input', { type: 'text', placeholder: 'Declarant name', value: (c.caseMeta.affidavit && c.caseMeta.affidavit.declarant) || '' });
+ const title = el('input', { type: 'text', placeholder: 'Title', value: (c.caseMeta.affidavit && c.caseMeta.affidavit.declarantTitle) || '' });
+ const jur = el('input', { type: 'text', placeholder: 'Jurisdiction', value: (c.caseMeta.affidavit && c.caseMeta.affidavit.jurisdiction) || '' });
+ const st = el('textarea', { rows: '5', placeholder: 'Statements, one per line', text: (c.caseMeta.affidavit && (c.caseMeta.affidavit.statements || []).join('\n')) || '' });
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'Declarant' }), name]),
+ el('label', { class: 'field' }, [el('span', { text: 'Title' }), title]),
+ el('label', { class: 'field' }, [el('span', { text: 'Jurisdiction' }), jur]),
+ el('label', { class: 'field' }, [el('span', { text: 'Statements' }), st])
+ ]);
+ const choice = await actionDialog({
+ title: 'Eidesstattliche Erklaerung',
+ notes: ['Hash-bound; the printed affidavit references the sealHash. Locked after sealing.'],
+ body: form,
+ buttons: [{ text: 'Cancel', value: 'cancel' }, { text: 'Save', value: 'ok', primary: true }]
+ });
+ if (choice !== 'ok') return;
+ const declarant = name.value.trim();
+ if (!declarant) { showToast('Declarant required', 'warn'); return; }
+ const statements = st.value.split('\n').map((s) => s.trim()).filter(Boolean);
+ if (!statements.length) { showToast('At least one statement is required', 'warn'); return; }
+ try {
+ const next = await bindAffidavit(c, { declarant, declarantTitle: title.value.trim(), jurisdiction: jur.value.trim(), statements });
+ await v04Commit(next, 'Affidavit created');
+ } catch (e) { showToast('Failed' + e.message, 'error'); }
+ } // --- v0.5 Transfer receipt / handover acknowledgment (HASH-BOUND custody event) -----------------
+ function renderTransferReceiptSection(c) {
+ const receipts = (c.custodyLog || []).filter((e) => e.eventType === 'Transferred' && e.recipient);
+ const body = el('div', {});
+ if (receipts.length) {
+ body.appendChild(el('ul', { class: 'log-list' }, receipts.map((e) => el('li', { class: 'log-item' }, [
+ el('strong', { text: 'Received by: ' + (e.recipient.name || '') }),
+ el('div', { class: 'lm', text: (e.recipient.title || '') + (e.recipient.org ? '' + e.recipient.org : '') + (e.recipient.acknowledged ? 'acknowledged' : 'NOT acknowledged') }),
+ e.recipient.signatureSha256 ? el('div', { class: 'lm mono', text: 'sig ' + e.recipient.signatureSha256 }) : null,
+ el('div', { class: 'lm', text: 'at ' + (e.recipient.receivedAt || '') })
+ ].filter(Boolean)))));
+ } else {
+ body.appendChild(el('div', { class: 'section-empty', text: 'No receipt.' }));
+ }
+ const canAdd = c.state === 'draft' || c.state === 'pending_countersign';
+ if (canAdd) body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, [
+ el('button', { class: 'btn', text: 'Receipt acknowledgment', onclick: () => doRecordTransferReceipt(c) })
+ ]));
+ return section('Handover receipt', body);
+ }
+
+ async function doRecordTransferReceipt(c) {
+ const name = el('input', { type: 'text', placeholder: 'Recipient name' });
+ const title = el('input', { type: 'text', placeholder: 'Title' });
+ const org = el('input', { type: 'text', placeholder: 'Org' });
+ const ack = el('input', { type: 'checkbox' }); ack.checked = true;
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'Recipient' }), name]),
+ el('label', { class: 'field' }, [el('span', { text: 'Title' }), title]),
+ el('label', { class: 'field' }, [el('span', { text: 'Org' }), org]),
+ el('label', { class: 'field' }, [el('span', { text: 'Acknowledged' }), ack])
+ ]);
+ const choice = await actionDialog({
+ title: 'Handover receipt',
+ notes: ['Hash-bound transfer event with recipient. Locked after sealing.'],
+ body: form,
+ buttons: [{ text: 'Cancel', value: 'cancel' }, { text: 'Save', value: 'ok', primary: true }]
+ });
+ if (choice !== 'ok') return;
+ if (!name.value.trim()) { showToast('Recipient required', 'warn'); return; }
+ try {
+ const next = await recordTransferReceipt(c, { recipient: { name: name.value.trim(), title: title.value.trim(), org: org.value.trim(), acknowledged: ack.checked } });
+ await v04Commit(next, 'Transfer receipt recorded');
+ } catch (e) { showToast('Failed' + e.message, 'error'); }
+ } // --- v0.5 Bates numbering (US litigation standard; additive config + per-child batesId) ------------
+ function renderBatesSection(c) {
+ const b = (c.caseMeta && c.caseMeta.bates) || { enabled: false, prefix: '', next: 1 };
+ const body = el('div', {});
+ body.appendChild(el('div', { class: 'lm', text: 'Status' + (b.enabled ? 'enabled' + (b.prefix || '') + ', next ' + (b.next || 1) + ')' : 'disabled') }));
+ const rows = (c.children || []).map((ch, i) =>
+ el('div', { class: 'lm' }, [
+ el('span', { text: (i + 1) + '. ' + (ch.evidenceId || '') + ' -> ' }),
+ el('strong', { text: ch.batesId || '(unassigned' })
+ ])
+ );
+ if (rows.length) body.appendChild(el('div', { class: 'section-block' }, rows));
+ else body.appendChild(el('div', { class: 'section-empty', text: 'No captures.' }));
+ const canEdit = c.state === 'draft' || c.state === 'pending_countersign';
+ if (canEdit) body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, [
+ el('button', { class: 'btn', text: 'Configure Bates', onclick: () => doConfigureBates(c) }),
+ el('button', { class: 'btn', text: 'Assign all', onclick: () => doAssignBatesAll(c) })
+ ]));
+ return section('Bates numbering', body);
+ }
+
+ async function doConfigureBates(c) {
+ const b = (c.caseMeta && c.caseMeta.bates) || { enabled: false, prefix: '', next: 1 };
+ const en = el('input', { type: 'checkbox' }); en.checked = b.enabled === true;
+ const pre = el('input', { type: 'text', placeholder: 'Prefix / e.g. FS-', value: b.prefix || '' });
+ const nx = el('input', { type: 'number', placeholder: 'Next', value: b.next || 1 });
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'Enabled' }), en]),
+ el('label', { class: 'field' }, [el('span', { text: 'Prefix' }), pre]),
+ el('label', { class: 'field' }, [el('span', { text: 'Next number' }), nx])
+ ]);
+ const choice = await actionDialog({
+ title: 'Bates numbering',
+ notes: ['Bates IDs are hash-bound; changes after sealing invalidate verification.'],
+ body: form,
+ buttons: [{ text: 'Cancel', value: 'cancel' }, { text: 'Save', value: 'ok', primary: true }]
+ });
+ if (choice !== 'ok') return;
+ try {
+ const next = parseInt(nx.value, 10);
+ const cfg = { enabled: en.checked, prefix: pre.value.trim() };
+ if (Number.isFinite(next) && next >= 1) cfg.next = next;
+ const nc = await configureBates(c, cfg);
+ await v04Commit(nc, 'Bates configured');
+ } catch (e) { showToast('Failed' + e.message, 'error'); }
+ }
+
+ async function doAssignBatesAll(c) {
+ try {
+ let nc = c;
+ for (const ch of (nc.children || [])) {
+ if (!ch.batesId) nc = await assignBates(nc, ch.evidenceId);
+ }
+ await v04Commit(nc, 'Bates assigned');
+ } catch (e) { showToast('Failed' + e.message, 'error'); }
+ } // --- v0.5 Witness endorsement (HASH-BOUND; see addWitnessStatement) -------------------------------
+ function renderWitnessSection(c) {
+ const ws = (c.caseMeta && c.caseMeta.witnessStatements) || [];
+ const body = el('div', {});
+ if (ws.length) {
+ body.appendChild(el('ul', { class: 'log-list' }, ws.map((w) => el('li', { class: 'log-item' }, [
+ el('strong', { text: 'Witness: ' + (w.witnessName || '') + (w.witnessTitle ? '' + w.witnessTitle : '') }),
+ el('div', { class: 'lm', text: w.statement || '' }),
+ el('div', { class: 'lm', text: 'at ' + (w.witnessedAt || '') })
+ ]))));
+ } else body.appendChild(el('div', { class: 'section-empty', text: 'No witness statement.' }));
+ const canEdit = c.state === 'draft' || c.state === 'pending_countersign';
+ if (canEdit) body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, [
+ el('button', { class: 'btn', text: 'Add witness', onclick: () => doAddWitness(c) })
+ ]));
+ return section('Witness attestation', body);
+ }
+
+ async function doAddWitness(c) {
+ const name = el('input', { type: 'text', placeholder: 'Witness name' });
+ const title = el('input', { type: 'text', placeholder: 'Title' });
+ const st = el('textarea', { rows: '4', placeholder: 'Statement' });
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'Witness' }), name]),
+ el('label', { class: 'field' }, [el('span', { text: 'Title' }), title]),
+ el('label', { class: 'field' }, [el('span', { text: 'Statement' }), st])
+ ]);
+ const choice = await actionDialog({
+ title: 'Witness attestation',
+ notes: ['Hash-bound; any change is detected as tampered.'],
+ body: form,
+ buttons: [{ text: 'Cancel', value: 'cancel' }, { text: 'Save', value: 'ok', primary: true }]
+ });
+ if (choice !== 'ok') return;
+ if (!name.value.trim() || !st.value.trim()) { showToast('Name and statement are required', 'warn'); return; }
+ try {
+ const nc = await addWitnessStatement(c, { witnessName: name.value.trim(), witnessTitle: title.value.trim(), statement: st.value.trim() });
+ await v04Commit(nc, 'Witness recorded');
+ } catch (e) { showToast('Failed' + e.message, 'error'); }
+ } // --- v0.5 Retention / legal hold (HASH-BOUND; see setRetention) ------------------------------------
+ function renderRetentionSection(c) {
+ const r = (c.caseMeta && c.caseMeta.retention) || {};
+ const body = el('div', {});
+ if (r && (r.legalHold || r.policy || r.holdUntil || r.holdReason)) {
+ body.appendChild(el('dl', { class: 'kv' }, [
+ el('dt', { text: 'Legal hold' }), el('dd', { text: r.legalHold ? 'ACTIVE' : 'inactive' }),
+ el('dt', { text: 'Policy' }), el('dd', { text: r.policy || '' }),
+ el('dt', { text: 'Hold until' }), el('dd', { class: 'mono', text: r.holdUntil || '' }),
+ el('dt', { text: 'Reason' }), el('dd', { text: r.holdReason || '' }),
+ el('dt', { text: 'Noted' }), el('dd', { class: 'mono', text: r.notedAt || '' })
+ ]));
+ } else body.appendChild(el('div', { class: 'section-empty', text: 'No retention record' }));
+ const canEdit = c.state === 'draft' || c.state === 'pending_countersign';
+ if (canEdit) body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, [
+ el('button', { class: 'btn', text: 'Set retention', onclick: () => doSetRetention(c) })
+ ]));
+ return section('Retention & Legal Hold', body);
+ }
+
+ async function doSetRetention(c) {
+ const r = (c.caseMeta && c.caseMeta.retention) || {};
+ const hold = el('input', { type: 'checkbox' }); hold.checked = r.legalHold === true;
+ const pol = el('input', { type: 'text', placeholder: 'Policy / e.g. 7y', value: r.policy || '' });
+ const until = el('input', { type: 'date', value: (r.holdUntil || '').slice(0, 10) });
+ const reason = el('textarea', { rows: '3', placeholder: 'Reason', text: r.holdReason || '' });
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'Legal hold' }), hold]),
+ el('label', { class: 'field' }, [el('span', { text: 'Policy' }), pol]),
+ el('label', { class: 'field' }, [el('span', { text: 'Hold until' }), until]),
+ el('label', { class: 'field' }, [el('span', { text: 'Reason' }), reason])
+ ]);
+ const choice = await actionDialog({
+ title: 'Retention & Legal Hold',
+ notes: ['Hash-bound; any change is detected as tampered.'],
+ body: form,
+ buttons: [{ text: 'Cancel', value: 'cancel' }, { text: 'Save', value: 'ok', primary: true }]
+ });
+ if (choice !== 'ok') return;
+ try {
+ const nc = await setRetention(c, { legalHold: hold.checked, policy: pol.value.trim(), holdUntil: until.value ? until.value + 'T00:00:00Z' : '', holdReason: reason.value.trim() });
+ await v04Commit(nc, 'Retention set');
+ } catch (e) { showToast('Failed' + e.message, 'error'); }
+ } // --- v0.5 Media redaction (rootHash-only derivative record, OUTSIDE sealHash; see addMediaRedaction) -
+ function renderMediaRedactionSection(c) {
+ const ms = c.mediaRedactions || [];
+ const body = el('div', {});
+ if (ms.length) {
+ body.appendChild(el('ul', { class: 'log-list' }, ms.map((m) => el('li', { class: 'log-item' }, [
+ el('strong', { text: 'Evidence ' + (m.evidenceId || '') + ' \u00b7 ' + (m.method || 'blur') }),
+ el('div', { class: 'lm', text: 'region x' + m.region.x + ' y' + m.region.y + ' w' + m.region.w + ' h' + m.region.h }),
+ el('div', { class: 'lm mono', text: 'orig ' + m.originalSha256 + ' -> redacted ' + m.redactedSha256 })
+ ]))));
+ } else body.appendChild(el('div', { class: 'section-empty', text: 'No redaction.' }));
+ const canEdit = c.state === 'draft' || c.state === 'pending_countersign';
+ if (canEdit) body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, [
+ el('button', { class: 'btn', text: 'Record redaction', onclick: () => doAddMediaRedaction(c) })
+ ]));
+ return section('Media redaction / Redaction', body);
+ }
+
+ async function doAddMediaRedaction(c) {
+ const ev = el('input', { type: 'text', placeholder: 'Evidence ID' });
+ const method = el('select', {});
+ for (const m of ['blur', 'pixelate', 'crop', 'blackout']) method.appendChild(el('option', { value: m, text: m }));
+ const orig = el('input', { type: 'text', placeholder: 'original sha256:...' });
+ const red = el('input', { type: 'text', placeholder: 'redacted sha256:...' });
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'Evidence' }), ev]),
+ el('label', { class: 'field' }, [el('span', { text: 'Method' }), method]),
+ el('label', { class: 'field' }, [el('span', { text: 'Original sha256' }), orig]),
+ el('label', { class: 'field' }, [el('span', { text: 'Redacted sha256' }), red])
+ ]);
+ const choice = await actionDialog({
+ title: 'Media redaction',
+ notes: ['Original and redacted hashes must both be valid sha256 values.'],
+ body: form,
+ buttons: [{ text: 'Cancel', value: 'cancel' }, { text: 'Save', value: 'ok', primary: true }]
+ });
+ if (choice !== 'ok') return;
+ if (!ev.value.trim() || !/^sha256:[0-9a-f]{64}$/.test(orig.value.trim()) || !/^sha256:[0-9a-f]{64}$/.test(red.value.trim())) {
+ showToast('Evidence + sha256 / sha256', 'warn'); return;
+ }
+ try {
+ const nc = await addMediaRedaction(c, { evidenceId: ev.value.trim(), method: method.value, originalSha256: orig.value.trim(), redactedSha256: red.value.trim() });
+ await v04Commit(nc, 'Redaction recorded');
+ } catch (e) { showToast('Failed' + e.message, 'error'); }
+ } // --- v0.5 Multi-person multi-control / dual-control approval gate (rootHash-only) --------------------
+ function renderApprovalSection(c) {
+ const pol = c.approvalPolicy || {};
+ const actions = pol.actions || [];
+ const status = c.approvalStatus || {};
+ const approvals = c.approvals || [];
+ const body = el('div', {});
+ if (pol && pol.requiredK) {
+ body.appendChild(el('div', { class: 'lm', text: 'Policy:' + pol.requiredK + '-of-' + pol.totalN + 'actions:' + actions.join(', ') }));
+ body.appendChild(el('ul', { class: 'log-list' }, actions.map((a) => el('li', { class: 'log-item' }, [
+ el('strong', { text: a + ': ' + (status[a] === 'authorized' ? 'authorized' : 'pending') })
+ ]))));
+ } else {
+ body.appendChild(emptyNote('No release policy.'));
+ }
+ if (approvals.length) {
+ body.appendChild(el('ul', { class: 'log-list' }, approvals.map((ap) => el('li', { class: 'log-item' }, [
+ el('div', { class: 'lm', text: ap.action + ' \u00b7 ' + (ap.approverName || ap.approverId) + ' \u00b7 ' + (ap.method || 'operatorProfile') + ' \u00b7 ' + (ap.approvedAt || '') })
+ ]))));
+ }
+ const canEdit = c.state === 'draft' || c.state === 'pending_countersign';
+ if (canEdit) body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, [
+ el('button', { class: 'btn', text: 'Set policy', onclick: () => doSetApprovalPolicy(c) }),
+ el('button', { class: 'btn', text: 'Record approval', onclick: () => doRecordApproval(c) })
+ ]));
+ return section('Multi-party release', body);
+ }
+
+ async function doSetApprovalPolicy(c) {
+ const k = el('input', { type: 'number', value: '2', min: '2' });
+ const n = el('input', { type: 'number', value: '2', min: '2' });
+ const seal = el('input', { type: 'checkbox', checked: true });
+ const exp = el('input', { type: 'checkbox', checked: true });
+ const tr = el('input', { type: 'checkbox', checked: true });
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'requiredK' }), k]),
+ el('label', { class: 'field' }, [el('span', { text: 'totalN / ≥requiredK' }), n]),
+ el('label', { class: 'field' }, [el('span', { text: 'seal' }), seal]),
+ el('label', { class: 'field' }, [el('span', { text: 'export' }), exp]),
+ el('label', { class: 'field' }, [el('span', { text: 'transfer' }), tr])
+ ]);
+ const choice = await actionDialog({
+ title: 'Multi-party release',
+ notes: ['2-of-2 or 2-of-N approval policy; required K must not exceed total N.'],
+ body: form,
+ buttons: [{ text: 'Cancel', value: 'cancel' }, { text: 'Save', value: 'ok', primary: true }]
+ });
+ if (choice !== 'ok') return;
+ const actions = [];
+ if (seal.checked) actions.push('seal');
+ if (exp.checked) actions.push('export');
+ if (tr.checked) actions.push('transfer');
+ if (!actions.length) { showToast('select at least one action', 'warn'); return; }
+ try {
+ const nc = await setApprovalPolicy(c, { requiredK: parseInt(k.value, 10) || 2, totalN: parseInt(n.value, 10) || 2, actions });
+ await v04Commit(nc, 'Release policy set');
+ } catch (e) { showToast('Failed' + e.message, 'error'); }
+ }
+
+ async function doRecordApproval(c) {
+ if (!c.approvalPolicy) { showToast('set policy first', 'warn'); return; }
+ const action = el('select', {}, c.approvalPolicy.actions.map((a) => el('option', { value: a, text: a })));
+ const id = el('input', { type: 'text', placeholder: 'approverId' });
+ const name = el('input', { type: 'text', placeholder: 'approverName' });
+ const method = el('select', {}, ['operatorProfile', 'certificate', 'externalIdP'].map((m) => el('option', { value: m, text: m })));
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'action' }), action]),
+ el('label', { class: 'field' }, [el('span', { text: 'approverId' }), id]),
+ el('label', { class: 'field' }, [el('span', { text: 'approverName' }), name]),
+ el('label', { class: 'field' }, [el('span', { text: 'method' }), method])
+ ]);
+ const choice = await actionDialog({
+ title: 'Record approval',
+ notes: ['Approval identity is metadata, not a qualified eIDAS signature.'],
+ body: form,
+ buttons: [{ text: 'Cancel', value: 'cancel' }, { text: 'Save', value: 'ok', primary: true }]
+ });
+ if (choice !== 'ok') return;
+ if (!id.value.trim()) { showToast('approverId / required', 'warn'); return; }
+ try {
+ const nc = await recordApproval(c, { action: action.value, approverId: id.value.trim(), approverName: name.value.trim(), method: method.value });
+ await v04Commit(nc, 'Release recorded');
+ } catch (e) { showToast('Failed' + e.message, 'error'); }
+ } // --- v0.5 Geographic attestation (rootHash-only; see recordGeoAttestation) ---------------------------
+ function renderGeoSection(c) {
+ const gas = c.geoAttestations || [];
+ const body = el('div', {});
+ if (gas.length) {
+ body.appendChild(el('ul', { class: 'log-list' }, gas.map((g) => el('li', { class: 'log-item' }, [
+ el('strong', { text: (g.latitude != null ? g.latitude.toFixed(4) : '?') + ', ' + (g.longitude != null ? g.longitude.toFixed(4) : '?') + (g.accuracyMeters ? ' ±' + g.accuracyMeters + 'm' : '') }),
+ el('div', { class: 'lm', text: (g.method || 'gps') + (g.source ? ' \u00b7 ' + g.source : '') + (g.linkedAction ? ' \u00b7 ' + g.linkedAction : '') + ' \u00b7 ' + (g.attestedAt || '') })
+ ]))));
+ } else body.appendChild(emptyNote('No geolocation. / attestation'));
+ const canEdit = c.state === 'draft' || c.state === 'pending_countersign';
+ if (canEdit) body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, [
+ el('button', { class: 'btn', text: 'Record geolocation / attestation', onclick: () => doRecordGeo(c) })
+ ]));
+ return section('Geolocation attestation(rootHash-only)', body);
+ }
+
+ async function doRecordGeo(c) {
+ const lat = el('input', { type: 'text', placeholder: 'latitude' });
+ const lon = el('input', { type: 'text', placeholder: 'longitude' });
+ const acc = el('input', { type: 'text', placeholder: 'accuracyMeters / m' });
+ const source = el('input', { type: 'text', placeholder: 'source' });
+ const method = el('select', {}, ['gps', 'network', 'cell', 'manual'].map((m) => el('option', { value: m, text: m })));
+ const linked = el('input', { type: 'text', placeholder: 'linkedAction / seal / export / transfer)' });
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'latitude' }), lat]),
+ el('label', { class: 'field' }, [el('span', { text: 'longitude' }), lon]),
+ el('label', { class: 'field' }, [el('span', { text: 'accuracyMeters' }), acc]),
+ el('label', { class: 'field' }, [el('span', { text: 'source' }), source]),
+ el('label', { class: 'field' }, [el('span', { text: 'method' }), method]),
+ el('label', { class: 'field' }, [el('span', { text: 'linkedAction' }), linked])
+ ]);
+ const choice = await actionDialog({
+ title: 'Geolocation attestation',
+ notes: ['Location attestation is hash-bound to rootHash/sealHash.'],
+ body: form,
+ buttons: [{ text: 'Cancel', value: 'cancel' }, { text: 'Save', value: 'ok', primary: true }]
+ });
+ if (choice !== 'ok') return;
+ if (lat.value.trim() === '' || lon.value.trim() === '') { showToast('latitude / longitude / required', 'warn'); return; }
+ try {
+ const nc = await recordGeoAttestation(c, {
+ latitude: lat.value.trim(), longitude: lon.value.trim(),
+ accuracyMeters: acc.value.trim() === '' ? 0 : Number(acc.value.trim()),
+ source: source.value.trim(), method: method.value, linkedAction: linked.value.trim()
+ });
+ await v04Commit(nc, 'Geolocation attestation recorded');
+ } catch (e) { showToast('Failed' + e.message, 'error'); }
+ }
+
+ function renderTsaSection(c) {
+ const tss = (c.caseMeta && Array.isArray(c.caseMeta.tsaTimestamps)) ? c.caseMeta.tsaTimestamps : [];
+ const body = el('div', {});
+ if (tss.length) {
+ body.appendChild(el('ul', { class: 'log-list' }, tss.map((t) => el('li', { class: 'log-item' }, [
+ el('strong', { text: (t.status === 'fetched' ? 'Anchored' : 'Pending') + (t.genTime ? '' + t.genTime : '') }),
+ el('div', { class: 'lm', text: (t.tsaUrl || '') + (t.error ? '' + t.error : '') })
+ ]))));
+ } else {
+ body.appendChild(emptyNote('No TSA anchors.'));
+ }
+ if (c.state === 'draft' || c.state === 'pending_countersign' || c.state === 'sealed') {
+ body.appendChild(el('div', { class: 'row', style: 'margin-top:10px' }, [
+ el('button', { class: 'btn', text: 'Set TSA anchor', onclick: () => doAnchorTimestamp(c) })
+ ]));
+ }
+ return section('Trusted Timestamp (RFC3161)', body);
+ }
+
+ async function doAnchorTimestamp(c) {
+ const url = el('input', { type: 'text', placeholder: 'tsa.example.com/timestamp' });
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'TSA URL' }), url]),
+ el('div', { class: 'lm', text: 'Only the rootHash is sent; no media / signatures.' })
+ ]);
+ const choice = await actionDialog({
+ title: 'Trusted Timestamp (RFC3161)',
+ notes: ['Offen / SPEC § TSA', 'Token , sealHash;CA PKI'],
+ body: form,
+ buttons: [
+ { text: 'Cancel', value: 'cancel' },
+ { text: 'Anfordern', value: 'ok', primary: true }
+ ]
+ });
+ if (choice !== 'ok') return;
+ const tsaUrl = url.value.trim();
+ if (!tsaUrl) { showToast('TSA URL required', 'warn'); return; }
+ showToast('Request in progress…', 'ok');
+ const result = await requestTimestamp(tsaUrl, c.rootHash || '');
+ try {
+ const next = await attachTsaTimestamp(c, result);
+ await v04Commit(next, 'TSA-Anker');
+ showToast(result.status === 'fetched' ? 'Anchor set' : 'Pending (Offline)', result.status === 'fetched' ? 'ok' : 'warn');
+ } catch (e) { showToast('Anchor failed' + e.message, 'error'); }
+ }
+
+ async function doAddHumanNote(c) {
+ const text = el('textarea', { rows: '4', placeholder: 'Forensic note / : why collected, scene context, witness present, consent obtained...' });
+ const jc = el('select', {});
+ for (const v of ['', 'US-FRE', 'Germany-ZPO', 'UK-Civil', 'General Audit']) jc.appendChild(el('option', { value: v, text: v || 'None' }));
+ const form = el('div', { class: 'field' }, [
+ el('label', { class: 'field' }, [el('span', { text: 'Note' }), text]),
+ el('label', { class: 'field' }, [el('span', { text: 'Jurisdiction context' }), jc])
+ ]);
+ const choice = await actionDialog({
+ title: 'Add forensic note',
+ notes: ['Available only in draft or pending countersign; locked after sealing.'],
+ body: form,
+ buttons: [
+ { text: 'Cancel', value: 'cancel' },
+ { text: 'Add', value: 'ok', primary: true }
+ ]
+ });
+ if (choice !== 'ok') return;
+ const noteText = text.value.trim();
+ if (!noteText) { showToast('Note required', 'warn'); return; }
+ try {
+ const next = await addHumanNote(c, { noteText, jurisdictionContext: jc.value });
+ await v04Commit(next, 'Forensic note added');
+ } catch (e) { showToast('Add failed' + e.message, 'error'); }
+ }
+
+ function renderV04(c, host) {
+ const commit = async (promise, msg) => {
+ try { await v04Commit(await promise, msg); }
+ catch (e) { showToast('v0.4 / Operation failed:' + e.message, 'error'); }
+ };
+ const body = el('div', {}); // Non-v0.4 cases: read-only at their ORIGINAL specVersion, all v0.4 entries hidden.
+ if (!isV04Case(c)) {
+ const resolved = resolveSpecVersion(c);
+ body.appendChild(el('div', { class: 'phase-note', text: V04_UNSUPPORTED + ' ' + resolved }));
+ if (c.state === 'draft' && CASE_SPEC_VERSIONS.includes(resolved) && resolved !== SPEC_VERSION_V04) {
+ body.appendChild(el('button', {
+ class: 'btn btn-primary', text: 'v0.4 / Migrate to v0.4',
+ onclick: () => commit(migrateCaseToV04(c, { ianaTz: tzIana() }), 'v0.4 / Migrated to v0.4')
+ }));
+ body.appendChild(el('div', { class: 'notice', text: 'Migration is an explicit, LEGAL change and produces a NEW rootHash. Exports made before migration still verify under their original specVersion. / rootHash' }));
+ } else {
+ body.appendChild(el('div', { class: 'notice', text: 'Opened READ-ONLY at the original specVersion. Migration in ' + c.state + 'would change rootHash and invalidate countersigned objects / the sealed conclusion; every v0.4 entry is hidden. / v0.4' }));
+ }
+ host.appendChild(section('v0.4 / Version state', body));
+ return;
+ }
+
+ const gated = (text, action, fn, draftOnly) => {
+ const enabled = draftOnly ? c.state === 'draft' : v04ActionAllowed(c.state, action);
+ const b = el('button', { class: 'btn', text });
+ if (!enabled) { b.setAttribute('disabled', ''); b.setAttribute('title', 'v0.4 permission matrix: ' + action + ' forbidden in ' + c.state); }
+ else b.addEventListener('click', fn);
+ return b;
+ };
+
+ body.appendChild(el('div', { class: 'phase-note', text: 'specVersion ' + c.specVersion + ' · dictionaries ' + Object.keys(c.schemaDictionaries || {}).length + ' · snapshots ' + (c.snapshots || []).length + ' · notes ' + (c.thirdPartyNotes || []).length + ' \u00b7 ' + (c.isDeleted ? 'SOFT-DELETED' : 'active') + ' · watermark ' + (c.watermarkConfig && c.watermarkConfig.enabled ? 'on' : 'off') })); // 1. Field dictionaries (draft; Schema Lock also locks dictionaries).
+ const dictId = el('input', { id: 'v04-dict-id', type: 'text', placeholder: 'fieldId / ID' });
+ const dictVals = el('input', { id: 'v04-dict-vals', type: 'text', placeholder: 'comma,separated,values' });
+ const dictValues = () => dictVals.value.split(',').map((s) => s.trim()).filter(Boolean);
+ body.appendChild(el('div', { class: 'row' }, [dictId, dictVals]));
+ body.appendChild(el('div', { class: 'row' }, [
+ gated('Dictionary ADD', 'dictionaryWrite', () => commit(addSchemaDictionary(c, dictId.value.trim(), dictValues(), { ianaTz: tzIana() }), 'DICTIONARY_ADD')),
+ gated('Dictionary EDIT', 'dictionaryWrite', () => commit(editSchemaDictionary(c, dictId.value.trim(), dictValues(), { ianaTz: tzIana() }), 'DICTIONARY_EDIT')),
+ gated('Dictionary REMOVE', 'dictionaryWrite', () => commit(removeSchemaDictionary(c, dictId.value.trim(), { ianaTz: tzIana() }), 'DICTIONARY_REMOVE'))
+ ])); // 2. Batch item-field update (draft; one audit event with affectedCaptureIds).
+ const checks = (c.children || []).map((ch) => {
+ const box = el('input', { type: 'checkbox', 'data-capture': ch.evidenceId });
+ return { box, id: ch.evidenceId };
+ });
+ const bfKey = el('input', { id: 'v04-bf-key', type: 'text', placeholder: 'fieldKey' });
+ const bfVal = el('input', { id: 'v04-bf-val', type: 'text', placeholder: 'new value' });
+ body.appendChild(el('div', { class: 'row' }, checks.map((x) => el('label', { class: 'sub' }, [x.box, ' ' + x.id]))));
+ body.appendChild(el('div', { class: 'row' }, [bfKey, bfVal]));
+ body.appendChild(gated('Batch field update', 'batchFieldUpdate', () => commit(
+ batchUpdateItemField(c, {
+ captureIds: checks.filter((x) => x.box.checked).map((x) => x.id),
+ fieldKey: bfKey.value.trim(), value: bfVal.value
+ }, { ianaTz: tzIana() }), 'BATCH_FIELD_UPDATE'), true)); // 3. Visible watermark (dual digests) + 5. anti-forward text.
+ const wmOn = el('input', { id: 'v04-wm-on', type: 'checkbox' });
+ wmOn.checked = !!(c.watermarkConfig && c.watermarkConfig.enabled);
+ const wmText = el('input', { id: 'v04-wm-text', type: 'text', placeholder: 'anti-forward text', value: (c.watermarkConfig && c.watermarkConfig.text) || '' });
+ const wmFile = el('input', { id: 'v04-wm-file', type: 'file', accept: 'image/*' });
+ body.appendChild(el('div', { class: 'row' }, [el('label', { class: 'sub' }, [wmOn, 'watermark enabled']), wmText, wmFile]));
+ body.appendChild(el('div', { class: 'row' }, [
+ gated('Save watermark config', 'watermarkApply', () => commit(setWatermarkConfig(c, { enabled: wmOn.checked, text: wmText.value }, { ianaTz: tzIana() }), 'WATERMARK_CONFIG')),
+ gated('Apply visible watermark', 'watermarkApply', () => doApplyWatermark(c, wmFile))
+ ])); // 4. Snapshot: pure read-only export in EVERY state. Registration is a separate draft write.
+ body.appendChild(el('div', { class: 'notice', text: SNAPSHOT_NOTICE }));
+ body.appendChild(el('div', { class: 'row' }, [
+ gated('Generate snapshot', 'snapshotCreate', () => doSnapshot(c, false)),
+ gated('(draft) // Register snapshot metadata', 'snapshotCreate', () => doSnapshot(c, true), true)
+ ])); // 6. Third-party verification notes (draft + pending_countersign; sealed forbidden).
+ const noteBy = el('input', { id: 'v04-note-by', type: 'text', placeholder: 'noteBy' });
+ const noteOrg = el('input', { id: 'v04-note-org', type: 'text', placeholder: 'noteOrg' });
+ const noteText = el('input', { id: 'v04-note-text', type: 'text', placeholder: 'noteText' });
+ const noteDecision = el('select', { id: 'v04-note-decision' });
+ for (const d of NOTE_DECISIONS) noteDecision.appendChild(el('option', { value: d, text: d }));
+ body.appendChild(el('div', { class: 'row' }, [noteBy, noteOrg, noteDecision, noteText]));
+ body.appendChild(gated('Add third-party note', 'thirdPartyNoteAdd', () => commit(
+ addThirdPartyNote(c, { noteBy: noteBy.value, noteOrg: noteOrg.value, noteText: noteText.value, decision: noteDecision.value }, { ianaTz: tzIana() }), 'NOTE_ADDED'))); // 7. Soft delete / restore (draft only, never a physical IndexedDB delete). / 8. Report branding (draft only; excluded from sealHash).
+ const brandHeader = el('input', { id: 'v04-brand-header', type: 'text', placeholder: 'report headerText', value: (c.reportBranding && c.reportBranding.headerText) || '' });
+ const brandFooter = el('input', { id: 'v04-brand-footer', type: 'text', placeholder: 'report footerText', value: (c.reportBranding && c.reportBranding.footerText) || '' });
+ body.appendChild(el('div', { class: 'row' }, [brandHeader, brandFooter]));
+ body.appendChild(el('div', { class: 'row' }, [
+ gated(c.isDeleted ? 'Restore' : 'Soft delete', 'softDeleteOrRestore', () => commit(setSoftDeleted(c, !c.isDeleted, { ianaTz: tzIana() }), 'SOFT_DELETE_TOGGLE')),
+ gated('Save report branding', 'dictionaryWrite', () => commit(setReportBranding(c, { headerText: brandHeader.value, footerText: brandFooter.value }), 'REPORT_BRANDING'), true)
+ ])); // Extension hooks: flag=false => completely hidden and branch never executed.
+ const hookBody = el('div', {});
+ let shown = 0;
+ for (const hid of HOOK_IDS) {
+ if (FEATURE_FLAGS[hid] !== true) continue;
+ shown++;
+ const st = hookStatus(hid);
+ hookBody.appendChild(el('button', { class: 'btn', text: st.label, onclick: () => {
+ const r = callHook(hid, 'run', { caseId: c.packageId, state: c.state, specVersion: c.specVersion });
+ showToast(r.ok ? 'Extension hook executed on a read-only copy' : r.message, r.ok ? 'ok' : 'warn');
+ }}));
+ if (!st.available) hookBody.appendChild(el('span', { class: 'sub', text: ' library not loaded - friendly degradation, core flow unaffected' }));
+ }
+ if (!shown) hookBody.appendChild(el('div', { class: 'section-empty', text: 'All featureFlags are false: extension placeholders are hidden.' }));
+ body.appendChild(hookBody); // 9. Quota warning + 10. timed local backup reminder (both non-blocking, both with a dialog).
+ estimateQuota().then((est) => {
+ const text = quotaWarningText(est);
+ if (text) body.appendChild(el('div', { class: 'notice', text }));
+ }).catch(() => {});
+ startBackupReminder({ onReminder: () => openBackupDialog(c) });
+ body.appendChild(el('div', { class: 'row' }, [
+ el('button', {
+ class: 'btn', text: 'Backup reminder preview',
+ onclick: () => openBackupDialog(c)
+ }),
+ el('button', {
+ class: 'btn', text: 'Quota check',
+ onclick: () => openQuotaDialog()
+ }),
+ el('button', {
+ class: 'btn', text: 'BagIt archive',
+ onclick: () => doBagitExport(c)
+ })
+ ]));
+ body.appendChild(el('div', { class: 'attribution', text: ATTRIBUTION_LINE }));
+
+ host.appendChild(section('v0.4 / Incremental features', body));
+ }
+
+ async function doApplyWatermark(c, fileInput) {
+ const file = fileInput.files && fileInput.files[0];
+ if (!file) { showToast('Select an image first', 'warn'); return; }
+ try {
+ const w = await applyVisibleWatermark(file, c, { ianaTimezone: tzIana() });
+ await putCase(await recordWatermark(c, [{
+ evidenceId: 'upload-' + Date.now(), originalSha256: w.originalSha256,
+ watermarkedSha256: w.watermarkedSha256, appliedAtUtc: isoUtcNow(), label: w.label
+ }], { ianaTz: tzIana() }));
+ downloadBlob(w.blob, 'watermarked.png');
+ showToast('manifest / Dual digests recorded; original retained', 'ok');
+ location.reload();
+ } catch (e) { showToast('Watermark failed:' + e.message, 'error'); }
+ }
+
+ async function doSnapshot(c, register) {
+ try {
+ const { blob, snapshot, fileName } = await buildSnapshotZip(c);
+ downloadBlob(blob, fileName);
+ if (register && c.state === 'draft') {
+ await putCase(await recordSnapshot(c, {
+ snapshotId: snapshot.snapshotId, createdAtUtc: snapshot.createdAtUtc,
+ rootHash: snapshot.parentRootHash, specVersion: snapshot.parentSpecVersion
+ }, { ianaTz: tzIana() }));
+ showToast('snapshot metadata registered', 'ok');
+ location.reload();
+ } else {
+ showToast('read-only snapshot, main case unchanged', 'ok');
+ }
+ } catch (e) { showToast('Snapshot failed:' + e.message, 'error'); }
+ }
+
+ async function main() {
+ if (!id) { $('content').appendChild(emptyNote('No case ID. / ID')); return; }
+ if (!available()) { $('content').appendChild(emptyNote('IndexedDB not available.')); return; }
+ let c;
+ try { c = await getCase(id); } catch (e) { $('content').appendChild(emptyNote('Load failed: ' + e.message)); return; }
+ if (!c) { $('content').appendChild(emptyNote('Case not found.')); return; }
+ render(c);
+ }
+ main();
+</script>
+</body>
+</html>

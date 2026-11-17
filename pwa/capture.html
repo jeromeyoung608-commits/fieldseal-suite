@@ -1,0 +1,330 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Field Evidence - FieldSeal Suite</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+</head>
+<body>
+<div class="wrap">
+ <div class="topbar">
+ <div class="brand">
+ <img src="./assets/icon.svg" alt="FieldSeal">
+ <div>
+ <h1 data-i18n="page.capture.title">Field Evidence</h1>
+ <p><span>Capture</span> · <a href="./index.html">Start</a></p>
+ </div>
+ </div>
+ <span class="net-state" id="net-state">Offline-ready</span>
+ <span id="lang-switch" class="lang-switch-host"></span>
+ </div>
+
+ <div class="steps">
+ <div class="step active" id="step-draft">1. Draft</div>
+ <div class="step" id="step-packed">2. Build package</div>
+ <div class="step" id="step-download">3. Download</div>
+ </div>
+ <div class="status-line">
+ <span class="status-badge" id="status-badge" data-step="draft"></span>
+ <span id="status-text">Draft - capture files and metadata</span>
+ </div>
+
+ <section class="card">
+ <h2>Media</h2>
+ <p class="hint">Original files are written unchanged (STORE, no transcoding) into the ZIP.</p>
+ <div class="row">
+ <button class="btn" id="photo-btn">Take photo</button>
+ <button class="btn" id="video-btn">Record video</button>
+ <button class="btn btn-ghost" id="local-btn">Local files</button>
+ <button class="btn btn-ghost btn-danger" id="clear-btn">Clear</button>
+ </div>
+ <input type="file" id="photo-input" accept="image/*" capture="environment" multiple hidden>
+ <input type="file" id="video-input" accept="video/*" capture="environment" multiple hidden>
+ <input type="file" id="local-input" multiple hidden>
+ <ul class="file-list" id="file-list"></ul>
+
+ <details id="camera-details" style="margin-top:14px">
+ <summary>Device camera</summary>
+ <p class="hint" style="margin-top:10px">Photo / Video uses the device camera. If no camera is available or permission is denied, the local file picker opens automatically.</p>
+ <fieldseal-camera-panel id="camera"></fieldseal-camera-panel>
+ </details>
+ </section>
+
+ <section class="card">
+ <h2>Manifest</h2>
+ <div class="radio-group" style="margin-bottom:16px">
+ <label><input type="radio" name="version" id="version-v02" checked>fieldseal-evidence-v0.2 (full</label>
+ <label><input type="radio" name="version" id="version-v01">fieldseal-evidence-v0.1 (minimal</label>
+ </div>
+
+ <div id="v02-fields">
+ <div class="card" style="background:var(--surface-2);margin-bottom:16px">
+ <h3>GPS</h3>
+ <div class="grid-2">
+ <label class="field"><span>Latitude / lat</span><input type="text" id="lat" inputmode="decimal" placeholder="52.5200"></label>
+ <label class="field"><span>Longitude / lon</span><input type="text" id="lon" inputmode="decimal" placeholder="13.4050"></label>
+ </div>
+ <div class="row">
+ <button class="btn" id="gps-btn">Get position</button>
+ <span class="mono" id="gps-state">No coordinates yet</span>
+ </div>
+ <div class="notice">Without valid coordinates lat / lon are stored as 0 and a note is appended to the record automatically. Device time and GPS may be altered. / 0 ; GPS</div>
+ </div>
+ <label class="field"><span>Note</span><textarea id="note" placeholder=""></textarea></label>
+ <label class="field"><span>Tags (comma-separated</span><input type="text" id="tags" value="schaden, installation, handwerk"></label>
+ </div>
+
+ <label class="check">
+ <input type="checkbox" id="preview-toggle">
+ <span>Create preview copy (orientation only)<br>
+ <small class="mono">aux , · Reference only, not the original evidence · not in the root hash</small>
+ </span>
+ </label>
+ </section>
+
+ <section class="card">
+ <h2>Package</h2>
+ <div class="row">
+ <button class="btn btn-primary" id="pack-btn" disabled>Build package</button>
+ <button class="btn" id="download-btn" disabled>Download evidence.zip</button>
+ </div>
+ <div class="result" id="result">
+ <div class="notice" style="margin-top:16px">Package built locally. Verify with CLI.<br><span class="mono">node cli/bin/audit.js verify ./evidence.zip --json</span></div>
+ <p><strong>packageId</strong><br><span class="mono" id="result-package-id"></span></p>
+ <p><strong>rootHash</strong><br><span class="mono" id="result-root-hash"></span></p>
+ <p><strong>Scope</strong><br><span class="mono" id="result-size"></span></p>
+ <details>
+ <summary>Show manifest.json</summary>
+ <pre id="manifest-preview"></pre>
+ </details>
+ </div>
+ </section>
+
+ <footer>
+ <p data-lang="en"><strong>EN</strong> This tool produces tamper-resistant records. It is NOT a qualified electronic signature under eIDAS. No guarantee of admissibility in court is given. Identity verification of all participants is the sole responsibility of the user. Device timestamps may be altered.</p>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</div>
+
+<script type="module">
+ import './core/i18n.js';
+ import { buildZip, inspectBlob } from './core/zip-builder.js';
+ import {
+ EVIDENCE_V01, EVIDENCE_V02, buildEvidenceManifest, canonicalManifestText,
+ sanitizeFileName, sanityCheckMedia, normalizeDecimal
+ } from './core/evidence-manifest.js';
+ import { createPreview, PREVIEW_NOTE_TEXT } from './helpers/preview-encoder.js';
+ import {
+ el, formatBytes, showToast, setStatus, confirmDialog, downloadBlob,
+ registerServiceWorker, setOfflineIndicator
+ } from './ui/components.js';
+ import './ui/camera-panel.js';
+
+ const $ = (id) => document.getElementById(id);
+ const DECIMAL_INPUT_RE = /^-?\d+(?:\.\d+)?$/;
+const state = { items: [], package: null };
+
+ registerServiceWorker();
+ setOfflineIndicator();
+ setStatus('draft', 'Draft - capture files and metadata');
+
+ function invalidate() {
+ state.package = null;
+ $('result').classList.remove('visible');
+ $('download-btn').disabled = true;
+ setStatus('draft', 'Draft - change detected, package must be regenerated');
+ }
+
+ function renderFiles() {
+ const list = $('file-list');
+ list.textContent = '';
+ if (!state.items.length) {
+ list.appendChild(el('li', { class: 'file-item' }, [
+ el('div', { class: 'file-meta' }, [el('strong', { text: 'No files yet' })])
+ ]));
+ }
+ state.items.forEach((item, index) => {
+ list.appendChild(el('li', { class: 'file-item' }, [
+ el('div', { class: 'thumb' }),
+ el('div', { class: 'file-meta' }, [
+ el('strong', { text: item.originalName }),
+ el('small', { text: item.name + ' | ' + formatBytes(item.size) + ' | ' + item.hash.slice(0, 20) + '...' })
+ ]),
+ el('button', {
+ class: 'btn btn-ghost btn-danger',
+ text: 'Remove',
+ onclick: () => { state.items.splice(index, 1); invalidate(); renderFiles(); }
+ })
+ ]));
+ });
+ $('pack-btn').disabled = state.items.length === 0;
+ }
+
+ function guessType(file) {
+ if (file.type.startsWith('video')) return 'video';
+ if (file.type.startsWith('image')) return 'image';
+ return /\.(mp4|mov|webm|mkv|m4v|avi)$/i.test(file.name) ? 'video' : 'image';
+ }
+
+ async function addFiles(fileList, forcedType) {
+ const files = Array.from(fileList || []);
+ if (!files.length) return;
+ for (const file of files) {
+ const type = forcedType || guessType(file);
+ const base = sanitizeFileName(file.name, type, state.items.length + 1);
+ let name = base;
+ let suffix = 1;
+ while (state.items.some((item) => item.name === name)) {
+ name = base.replace(/(\.[^.]+)$/, '-' + suffix + '$1');
+ suffix++;
+ }
+ if (file.size > 200 * 1024 * 1024) {
+ showToast('Large file: the browser WebCrypto API must read it completely', 'warn');
+ }
+ const info = await inspectBlob(file);
+ state.items.push({
+ file, originalName: file.name, name, type,
+ size: info.size, crc32: info.crc32, hash: info.sha256
+ });
+ }
+ invalidate();
+ renderFiles();
+ showToast(files.length + ' file(s) added locally', 'ok');
+ }
+
+ const camera = $('camera');
+ camera.addEventListener('capture', (event) => {
+ addFiles([event.detail.file], event.detail.type);
+ showToast('Camera capture added', 'ok');
+ });
+ camera.addEventListener('closed', () => { $('camera-details').open = false; }); // Photo / Video MUST use the device camera. Only "Local files" opens the file picker / directly; a missing camera or denied permission degrades to the matching file picker.
+ async function openCamera(mode, fallbackInputId) {
+ const ok = await camera.open(mode);
+ $('camera-details').open = true;
+ if (ok) return;
+ showToast('Camera not available - local file picker', 'warn');
+ $(fallbackInputId).click();
+ }
+ $('photo-btn').addEventListener('click', () => openCamera('photo', 'photo-input'));
+ $('video-btn').addEventListener('click', () => openCamera('video', 'video-input'));
+ $('local-btn').addEventListener('click', () => $('local-input').click());
+ $('photo-input').addEventListener('change', (event) => { addFiles(event.target.files, 'image'); event.target.value = ''; });
+ $('video-input').addEventListener('change', (event) => { addFiles(event.target.files, 'video'); event.target.value = ''; });
+ $('local-input').addEventListener('change', (event) => { addFiles(event.target.files, null); event.target.value = ''; });
+ $('clear-btn').addEventListener('click', async () => {
+ if (!state.items.length) return;
+ if (await confirmDialog('Remove all files from the draft?')) {
+ state.items = []; invalidate(); renderFiles();
+ }
+ });
+
+ for (const id of ['lat', 'lon', 'note', 'tags']) $(id).addEventListener('input', invalidate);
+ $('preview-toggle').addEventListener('change', invalidate);
+ for (const id of ['version-v01', 'version-v02']) $(id).addEventListener('change', () => {
+ $('v02-fields').hidden = $('version-v01').checked;
+ invalidate();
+ });
+
+ $('gps-btn').addEventListener('click', () => {
+ if (!navigator.geolocation) { showToast('Geolocation not available', 'warn'); return; }
+ $('gps-state').textContent = 'Getting position...';
+ navigator.geolocation.getCurrentPosition(
+ (position) => {
+ $('lat').value = position.coords.latitude.toFixed(6);
+ $('lon').value = position.coords.longitude.toFixed(6);
+ $('gps-state').textContent = 'GPS captured';
+ invalidate();
+ },
+ (error) => {
+ $('gps-state').textContent = 'GPS not available' + error.message;
+ showToast('Please enter coordinates manually', 'warn');
+ },
+ { enableHighAccuracy: true, timeout: 12000, maximumAge: 0 }
+ );
+ }); // Camera lifecycle is owned by <fieldseal-camera-panel>; no duplicate MediaRecorder logic here.
+ $('pack-btn').addEventListener('click', async () => {
+ if (!state.items.length) return;
+ $('pack-btn').disabled = true;
+ try {
+ const version = $('version-v01').checked ? EVIDENCE_V01 : EVIDENCE_V02;
+ let gps = null;
+ let note = $('note').value.trim();
+ let mp4SanityCheck = { status: 'skipped', note: 'no video in package' };
+ if (version === EVIDENCE_V02) {
+ const lat = $('lat').value.trim();
+ const lon = $('lon').value.trim();
+ if (!DECIMAL_INPUT_RE.test(lat) || !DECIMAL_INPUT_RE.test(lon)) {
+ gps = { lat: '0', lon: '0' };
+ note = (note ? note + '\n' : '') + '[GPS unavailable / GPS not available; coordinates recorded as 0]';
+ showToast('No valid coordinates: 0 with a note in the notes', 'warn');
+ } else {
+ gps = { lat: normalizeDecimal(lat), lon: normalizeDecimal(lon) };
+ }
+ const firstVideo = state.items.find((item) => item.type === 'video');
+ if (firstVideo) mp4SanityCheck = await sanityCheckMedia(firstVideo.file, 'video');
+ }
+ const tags = $('tags').value.split(',').map((tag) => tag.trim()).filter(Boolean);
+ const files = state.items.map((item) => ({ name: item.name, hash: item.hash, type: item.type }));
+ const manifest = await buildEvidenceManifest({ version, files, gps, note, tags, mp4SanityCheck });
+ const manifestText = canonicalManifestText(manifest);
+
+ const entries = [{ name: 'manifest.json', data: new TextEncoder().encode(manifestText) }];
+ for (const item of state.items) {
+ entries.push({ name: item.name, blob: item.file, size: item.size, crc32: item.crc32, sha256: item.hash });
+ }
+
+ if ($('preview-toggle').checked) {
+ let created = 0;
+ for (let i = 0; i < state.items.length; i++) {
+ try {
+ const preview = await createPreview(state.items[i].file, state.items[i].type);
+ const info = await inspectBlob(preview.blob);
+ entries.push({
+ name: 'aux/preview-' + (i + 1) + '.jpg',
+ blob: preview.blob, size: info.size, crc32: info.crc32, sha256: info.sha256
+ });
+ created++;
+ } catch (error) {
+ // * optional auxiliary preview: skip on failure, never affects evidence *
+ }
+ }
+ if (created) entries.push({ name: 'aux/preview-note.txt', data: new TextEncoder().encode(PREVIEW_NOTE_TEXT + '\n') });
+ }
+
+ const blob = await buildZip(entries);
+ state.package = { blob, manifest, manifestText };
+ $('result').classList.add('visible');
+ $('result-package-id').textContent = manifest.packageId;
+ $('result-root-hash').textContent = manifest.rootHash;
+ $('result-size').textContent = formatBytes(blob.size) + ' | ' + entries.length + ' entries';
+ $('manifest-preview').textContent = JSON.stringify(JSON.parse(manifestText), null, 2);
+ $('download-btn').disabled = false;
+ setStatus('packed', 'Package built');
+ showToast('evidence.zip built locally', 'ok');
+ } catch (error) {
+ showToast('Package failed: ' + error.message, 'error');
+ } finally {
+ $('pack-btn').disabled = state.items.length === 0;
+ }
+ });
+
+ $('download-btn').addEventListener('click', () => {
+ if (!state.package) return;
+ downloadBlob(state.package.blob, 'evidence.zip');
+ setStatus('download', 'evidence.zip downloaded');
+ showToast('Download started', 'ok');
+ });
+
+ renderFiles();
+</script>
+</body>
+</html>

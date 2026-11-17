@@ -1,0 +1,207 @@
+<!doctype html>
+<!--
+ FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ License: MIT
+ Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Custody Entry - FieldSeal Suite</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+</head>
+<body>
+<div class="wrap">
+ <div class="topbar">
+ <div class="brand">
+ <img src="./assets/icon.svg" alt="FieldSeal">
+ <div>
+ <h1>Chain of Custody</h1>
+ <p>Case-related events</p>
+ </div>
+ </div>
+ <span class="net-state" id="net-state">Offline-ready</span>
+ <span id="lang-switch" class="lang-switch-host"></span>
+ </div>
+
+ <a class="back-link" id="back-link" href="./cases.html">&larr; To case</a>
+
+ <div class="card">
+ <h2 id="case-head">Case</h2>
+ <div id="case-info"></div>
+ </div>
+
+ <div class="card" id="locked-card" hidden>
+ <div class="notice">This case is sealed. Custody entries are locked.</div>
+ </div>
+
+ <div id="entry-area">
+ <div class="card">
+ <h2>New event</h2>
+ <p class="hint"><span class="mono">Collected</span> is generated automatically on every capture, <span class="mono">Sealed</span>on sealing.</p>
+ <div class="grid-2">
+ <label class="field"><span>Event type</span><select id="event-type"></select></label>
+ <label class="field"><span>Transfer purpose</span><select id="transfer-purpose"></select></label>
+ </div>
+ <div class="grid-2">
+ <label class="field"><span>Actor</span><input type="text" id="actor" placeholder="Alice"></label>
+ <label class="field"><span>Role</span><input type="text" id="actor-title" placeholder="Custodian"></label>
+ </div>
+ <div class="grid-2">
+ <label class="field"><span>Scope</span><select id="scope"></select></label>
+ <label class="field"><span>IANA timezone</span><input type="text" id="tz" placeholder="UTC"></label>
+ </div>
+ <label class="field"><span>Note</span><textarea id="note" placeholder="Handover to laboratory"></textarea></label>
+ <p class="hint">UTC timestamp is generated automatically on save (not manually editable). / UTC</p>
+ <div class="row">
+ <button class="btn btn-primary" id="add-btn">Save event</button>
+ </div>
+ <div class="notice" id="kernel-error" hidden></div>
+ </div>
+ </div>
+
+ <div class="card">
+ <div class="row" style="justify-content:space-between">
+ <h2 style="margin:0">Previous events</h2>
+ <span class="mono" id="log-count"></span>
+ </div>
+ <ul class="log-list" id="log-list"></ul>
+ </div>
+
+ <footer>
+ <p data-lang="en"><strong>EN</strong> Validation runs only in the kernel (<span class="mono">pwa/core/case-manifest.js</span>); errors are shown verbatim. Device timestamps may be altered.</p>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</div>
+
+<script type="module">
+ import './core/i18n.js';
+ import { addCustodyEntry, EVENT_TYPES, TRANSFER_PURPOSES } from './core/case-manifest.js';
+ import { isoUtcNow } from './core/hash.js';
+ import { getCase, putCase, available } from './helpers/case-store.js';
+ import { el, showToast, registerServiceWorker, setOfflineIndicator } from './ui/components.js';
+
+ const $ = (id) => document.getElementById(id);
+ const STATE_LABEL = {
+ draft: 'Draft',
+ 'pending-configuration': 'Pending configuration',
+ sealed: 'Sealed'
+ };
+ const EVENT_LABEL = {
+ Collected: 'Captured', Transferred: 'Transferred', Reviewed: 'Reviewed',
+ Sealed: 'Sealed', Unsealed: 'Unsealed', Archived: 'Archived', Destroyed: 'Destroyed'
+ }; // Collected is emitted by capture, Sealed by sealCase; Unsealed cannot occur because a sealed case is locked.
+ const MANUAL_EVENTS = EVENT_TYPES.filter((t) => t !== 'Collected' && t !== 'Sealed' && t !== 'Unsealed');
+
+ registerServiceWorker();
+ setOfflineIndicator();
+
+ const caseId = new URLSearchParams(location.search).get('id');
+ $('back-link').href = './case-detail.html?id=' + encodeURIComponent(caseId || '');
+ const state = { caseObj: null };
+
+ try { $('tz').value = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch { $('tz').value = 'UTC'; }
+
+ function buildSelects(c) {
+ const et = $('event-type');
+ et.textContent = '';
+ for (const t of MANUAL_EVENTS) et.appendChild(el('option', { value: t, text: (EVENT_LABEL[t] || t) }));
+
+ const tp = $('transfer-purpose');
+ tp.textContent = '';
+ tp.appendChild(el('option', { value: '', text: '' }));
+ for (const p of TRANSFER_PURPOSES) tp.appendChild(el('option', { value: p, text: p }));
+
+ const sc = $('scope');
+ sc.textContent = '';
+ sc.appendChild(el('option', { value: 'all', text: 'Entire case / all' }));
+ for (const ch of c.children) {
+ sc.appendChild(el('option', { value: ch.evidenceId || ch.packageId, text: 'Capture' + (ch.evidenceId || ch.packageId).slice(0, 8) }));
+ }
+ }
+
+ function renderLog(c) {
+ const list = $('log-list');
+ list.textContent = '';
+ $('log-count').textContent = c.custodyLog.length + ' entries';
+ if (!c.custodyLog.length) {
+ list.appendChild(el('li', { class: 'section-empty', text: 'No events yet' }));
+ return;
+ }
+ for (const e of c.custodyLog) {
+ list.appendChild(el('li', { class: 'log-item' }, [
+ el('strong', { text: (EVENT_LABEL[e.eventType] || e.eventType) + (e.actorName ? '' + e.actorName : '') + (e.transferPurpose ? '' + e.transferPurpose : '') }),
+ el('div', { class: 'lm', text: (e.utc || '') + ' (' + (e.ianaTz || 'UTC') + ')' + (e.evidenceId ? '' + e.evidenceId.slice(0, 8) : '') }),
+ e.note ? el('div', { text: e.note }) : null,
+ e.itemValues && Object.keys(e.itemValues).length
+ ? el('div', { class: 'lm', text: 'itemValues: ' + JSON.stringify(e.itemValues) }) : null
+ ]));
+ }
+ }
+
+ $('add-btn').addEventListener('click', async () => {
+ const c = state.caseObj;
+ if (!c || c.state === 'sealed' || !available()) return;
+ const errNode = $('kernel-error');
+ errNode.hidden = true;
+ const scopeVal = $('scope').value;
+ try {
+ await addCustodyEntry(c, {
+ eventType: $('event-type').value,
+ utc: isoUtcNow(),
+ ianaTz: $('tz').value.trim() || 'UTC',
+ actorName: $('actor').value.trim(),
+ actorTitle: $('actor-title').value.trim(),
+ transferPurpose: $('transfer-purpose').value || null,
+ scope: scopeVal === 'all' ? 'all' : scopeVal,
+ evidenceId: scopeVal === 'all' ? null : scopeVal,
+ note: $('note').value.trim()
+ });
+ await putCase(c);
+ showToast('Event saved', 'ok');
+ $('note').value = '';
+ renderLog(c);
+ buildSelects(c);
+ } catch (e) { // Kernel errors are shown verbatim (never translated), same rule as custody.html.
+ errNode.textContent = e.message;
+ errNode.hidden = false;
+ showToast('Abgelehnt' + e.message, 'error');
+ }
+ });
+
+ async function main() {
+ if (!caseId || !available()) {
+ $('case-info').textContent = 'Case ID missing or IndexedDB unavailable. / ID IndexedDB';
+ $('entry-area').hidden = true; return;
+ }
+ let c;
+ try { c = await getCase(caseId); } catch (e) {
+ $('case-info').textContent = 'Load failed: ' + e.message;
+ $('entry-area').hidden = true; return;
+ }
+ if (!c) {
+ $('case-info').textContent = 'Case not found';
+ $('entry-area').hidden = true; return;
+ }
+ state.caseObj = c;
+ $('case-head').textContent = 'Case' + (c.caseMeta.title || c.packageId.slice(0, 8));
+ $('case-info').appendChild(el('div', { class: 'row' }, [
+ el('span', { class: 'state-badge state-' + c.state, text: STATE_LABEL[c.state] || c.state }),
+ el('span', { class: 'mono', text: 'Captures: ' + c.children.length })
+ ]));
+ if (c.state === 'sealed') {
+ $('locked-card').hidden = false;
+ $('entry-area').hidden = true;
+ } else {
+ buildSelects(c);
+ }
+ renderLog(c);
+ }
+ main();
+</script>
+</body>
+</html>

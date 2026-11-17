@@ -1,0 +1,296 @@
+<!doctype html>
+<!--
+ * FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ SPDX-License-Identifier: MIT
+ * License: MIT
+ * Ownership: FieldSeal Suite.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<title>Backup &amp; Restore — FieldSeal Suite</title>
+<link rel="icon" href="./assets/icon.svg">
+<link rel="stylesheet" href="./ui/style.css">
+</head>
+<body>
+<header class="topbar">
+ <a class="brand" href="./index.html">FieldSeal Suite</a>
+ <span class="topbar-sub">Backup · Restore · GDPR portability</span>
+ <span id="lang-switch"></span>
+</header>
+<main class="container" id="main-content" tabindex="-1">
+ <h1>Backup &amp; Restore</h1>
+ <p class="notice">Everything stays on this device. Exports never leave the browser unless you choose to copy the file.</p>
+
+ <div class="card">
+ <h2>1. Export a full local backup</h2>
+ <p>Includes all four IndexedDB object stores (cases, evidence packages, ciphers, signature images), the local operation trail and UI preferences, as JSON.</p>
+ <p>
+ <button class="btn" id="export-btn" type="button">Export backup JSON</button>
+ <button class="btn btn-ghost" id="export-log-btn" type="button">Export audit trail JSON</button>
+ <button class="btn btn-ghost" id="verify-log-btn" type="button">Verify signed log</button>
+ <input type="file" id="verify-log-file" accept="application/json" aria-label="Signed audit log file">
+ </p>
+ <p>
+ <button class="btn btn-ghost" id="export-device-key" type="button">Export device public key</button>
+ <button class="btn btn-ghost" id="export-tsa-key" type="button">Export TSA public key / TSA</button>
+ </p>
+ <p id="export-stat" class="muted" role="status">No backup created yet</p>
+ </div>
+
+ <div class="card">
+ <h2>2. Verify &amp; restore</h2>
+ <p>Restore replaces all local cases with the contents of a previously exported JSON. It cannot be undone, so export first.</p>
+ <p><input type="file" id="restore-input" accept=".json,application/json" aria-label="Backup JSON file / JSON"></p>
+ <p><label><input type="checkbox" id="confirm-restore">I understand this replaces all local cases</label></p>
+ <p>
+ <button class="btn" id="verify-btn" type="button">Verify backup</button>
+ <button class="btn btn-danger" id="restore-btn" type="button">Restore</button>
+ </p>
+ <p id="restore-stat" class="muted" role="status">No file selected</p>
+ </div>
+
+ <div class="card">
+ <h2>3. Offline CLI verification</h2>
+ <p>Package the exported JSON into a checksum-protected ZIP, verify it offline, and unpack it again:</p>
+ <pre class="mono">node cli/bin/backup.mjs export --input fieldseal-backup.json --out fieldseal-backup.zip
+node cli/bin/backup.mjs verify --input fieldseal-backup.zip
+node cli/bin/backup.mjs restore --input fieldseal-backup.zip --out restored.json</pre>
+ <p class="muted">A verified JSON can be imported again with the Restore button above. See <a href="./privacy.html">Privacy &amp; legal</a>.</p>
+ </div>
+
+ <footer>
+ <p class="attribution">FieldSeal Suite v0.5 / Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved. / License: MIT / Ownership: FieldSeal Suite project / FieldSeal Suite</p>
+ </footer>
+</main>
+<script type="module">
+ import './core/i18n.js';
+ import { showToast, downloadBlob } from './ui/components.js';
+ import { exportJson, getLog, verifyChain, getAuditConfig } from './helpers/local-audit-log.js';
+ import { signedLogExport, verifySignedExport, chainHead } from './helpers/audit-anchor.js';
+ import { ensureDeviceKey } from './helpers/audit-device-key.js';
+ import { ensureTsaKey, getTsaSpki, externalTimestamp } from './helpers/audit-tsa.js';
+ import { exportDevicePub, exportTsaPub, fingerprintSpki } from './helpers/audit-key-export.js';
+
+ const DB_NAME = 'fieldseal-cases';
+ const DB_VERSION = 4;
+ const STORES = ['cases', 'evidence-packages', 'case-ciphers', 'signature-images'];
+ const FORMAT = 'fieldseal-backup-v1';
+ const $ = (id) => document.getElementById(id);
+
+ function openDB() {
+ return new Promise((resolve, reject) => {
+ if (!window.indexedDB) return reject(new Error('IndexedDB unavailable'));
+ const req = indexedDB.open(DB_NAME, DB_VERSION);
+ req.onupgradeneeded = () => {
+ const db = req.result;
+ for (const name of STORES) if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'packageId' });
+ };
+ req.onsuccess = () => resolve(req.result);
+ req.onerror = () => reject(req.error);
+ });
+ }
+
+ function requestValue(req) {
+ return new Promise((resolve, reject) => { req.onsuccess = () => resolve(req.result); req.onerror = () => reject(req.error); });
+ }
+
+ function toBase64(bytes) {
+ const u8 = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+ let out = '';
+ for (let i = 0; i < u8.length; i += 8192) out += String.fromCharCode.apply(null, u8.subarray(i, i + 8192));
+ return btoa(out);
+ }
+ function fromBase64(text) {
+ const raw = atob(text);
+ const u8 = new Uint8Array(raw.length);
+ for (let i = 0; i < raw.length; i++) u8[i] = raw.charCodeAt(i);
+ return u8;
+ }
+
+ async function encodeValue(value) {
+ if (value === null || value === undefined) return value;
+ if (typeof Blob !== 'undefined' && value instanceof Blob) {
+ return { __fs_type: 'blob', mime: value.type, data: toBase64(await value.arrayBuffer()) };
+ }
+ if (value instanceof ArrayBuffer) return { __fs_type: 'bytes', data: toBase64(value) };
+ if (ArrayBuffer.isView(value)) return { __fs_type: 'bytes', data: toBase64(value.buffer.slice(value.byteOffset, value.byteOffset + value.byteLength)) };
+ if (value instanceof Date) return { __fs_type: 'date', data: value.toISOString() };
+ if (Array.isArray(value)) return Promise.all(value.map(encodeValue));
+ if (typeof value === 'object') {
+ const out = {};
+ for (const [k, v] of Object.entries(value)) out[k] = await encodeValue(v);
+ return out;
+ }
+ return value;
+ }
+
+ function decodeValue(value) {
+ if (value === null || value === undefined) return value;
+ if (Array.isArray(value)) return value.map(decodeValue);
+ if (typeof value === 'object' && value.__fs_type) {
+ const bytes = fromBase64(value.data || '');
+ if (value.__fs_type === 'blob') return new Blob([bytes], { type: value.mime || 'application/octet-stream' });
+ if (value.__fs_type === 'bytes') return bytes.buffer;
+ if (value.__fs_type === 'date') return value.data;
+ }
+ if (typeof value === 'object') {
+ const out = {};
+ for (const [k, v] of Object.entries(value)) out[k] = decodeValue(v);
+ return out;
+ }
+ return value;
+ }
+
+ async function readAll(db) {
+ const stores = {};
+ for (const name of STORES) {
+ const tx = db.transaction(name, 'readonly');
+ stores[name] = await encodeValue(await requestValue(tx.objectStore(name).getAll()));
+ }
+ return stores;
+ }
+
+ async function writeAll(db, stores) {
+ for (const name of STORES) {
+ if (!Array.isArray(stores[name])) throw new Error('Backup is missing store: ' + name);
+ const tx = db.transaction(name, 'readwrite');
+ const os = tx.objectStore(name);
+ os.clear();
+ for (const rec of stores[name]) os.put(decodeValue(rec));
+ await new Promise((resolve, reject) => { tx.oncomplete = resolve; tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error); });
+ }
+ }
+
+ async function makeBackup() {
+ const db = await openDB();
+ try {
+ const stores = await readAll(db);
+ const prefs = {};
+ for (let i = 0; i < localStorage.length; i++) {
+ const key = localStorage.key(i);
+ if (key && key.startsWith('fieldseal-')) prefs[key] = localStorage.getItem(key);
+ }
+ const counts = {};
+ for (const name of STORES) counts[name] = stores[name].length;
+ return { format: FORMAT, createdAt: new Date().toISOString(), toolVersion: 'v0.5', dbName: DB_NAME, dbVersion: DB_VERSION, counts, stores, localStorage: prefs, auditTrail: JSON.parse(exportJson()) };
+ } finally { db.close(); }
+ }
+
+ function validBackup(b) {
+ if (!b || b.format !== FORMAT) return 'Not a FieldSeal backup (bad format marker)';
+ if (b.dbName !== DB_NAME || b.dbVersion !== DB_VERSION) return 'Backup schema does not match this version';
+ for (const name of STORES) if (!Array.isArray(b.stores && b.stores[name])) return 'Missing or corrupt store: ' + name;
+ return '';
+ }
+
+ $('export-btn').addEventListener('click', async () => {
+ try {
+ const b = await makeBackup();
+ const json = JSON.stringify(b, null, 2);
+ downloadBlob(new Blob([json], { type: 'application/json' }), 'fieldseal-backup.json');
+ const total = Object.values(b.counts).reduce((a, n) => a + n, 0);
+ $('export-stat').textContent = 'Exported ' + total + ' records across ' + STORES.length + ' stores' + json.length + ' bytes';
+ showToast('Backup exportiert', 'ok');
+ } catch (e) { $('export-stat').textContent = 'Export failed: ' + e.message; showToast('Export failed', 'error'); }
+ }); // Build a signed export anchored by the device key + a timestamp anchor, branching on / getAuditConfig().tsa.mode ('off' | 'local' | 'external'). External failure THROWS / no silent fallback to a local token.
+ async function buildSignedExport(entries) {
+ const kp = await ensureDeviceKey();
+ const head = chainHead(entries);
+ const cfg = getAuditConfig();
+ const mode = (cfg.tsa && cfg.tsa.mode) || 'local';
+ let tsaToken = null, tsaRootFingerprint = null;
+ if (mode === 'off') { // no timestamp anchoring
+ } else if (mode === 'external' && cfg.tsa.endpoint) {
+ const ext = await externalTimestamp(head, cfg.tsa.endpoint, cfg.tsa.trustedRoot);
+ if (!ext || ext.kind !== 'rfc3161') throw new Error('external TSA did not return a valid RFC3161 token');
+ tsaToken = ext;
+ if (ext.tsaRootSpki) tsaRootFingerprint = await fingerprintSpki(ext.tsaRootSpki);
+ } else {
+ const tsa = await ensureTsaKey();
+ tsaToken = await createTimestamp(head, { tsaKeyPair: tsa, genTime: new Date().toISOString() });
+ tsaRootFingerprint = await fingerprintSpki(tsa.spki);
+ }
+ return signedLogExport(entries, kp, { tsaMode: mode, tsaToken, tsaRootFingerprint });
+ }
+ $('export-log-btn').addEventListener('click', async () => {
+ try {
+ const chain = await verifyChain();
+ const exp = await buildSignedExport(getLog());
+ downloadBlob(new Blob([JSON.stringify(exp, null, 2)], { type: 'application/json' }), 'recipient-audit-log-signed.json');
+ $('export-stat').textContent = 'Audit trail signed + TSA-anchored (' + chain.count + ' entries)';
+ showToast('Audit log signed + TSA-anchored export', 'ok');
+ } catch (e) {
+ $('export-stat').textContent = 'Export failed: ' + e.message;
+ showToast('Export failed', 'error');
+ }
+ });
+
+ $('verify-log-btn').addEventListener('click', async () => {
+ const file = $('verify-log-file') && $('verify-log-file').files && $('verify-log-file').files[0];
+ if (!file) { $('export-stat').textContent = 'Please choose a signed log file'; showToast('', 'info'); return; }
+ try {
+ const parsed = JSON.parse(await file.text());
+ const r = await verifySignedExport(parsed, (await ensureDeviceKey()).spki, { trustedTsaSpki: getTsaSpki() });
+ if (r.ok) $('export-stat').textContent = 'Signature valid (' + r.count + ' entries, TSA ' + String(r.tsaGenTime).slice(0, 19) + ')';
+ else $('export-stat').textContent = 'Signature INVALID: ' + r.reason;
+ showToast(r.ok ? 'Signature valid' : 'Signature invalid', r.ok ? 'ok' : 'error');
+ } catch (e) {
+ $('export-stat').textContent = 'Verify failed: ' + e.message;
+ showToast('Verify failed', 'error');
+ }
+ }); // 9.0 A2 — distribute device + TSA public keys as .pub files (SPKI, fingerprint-named).
+ const expDevice = $('export-device-key');
+ if (expDevice) expDevice.addEventListener('click', async () => {
+ try { const r = await exportDevicePub(); $('export-stat').textContent = 'Device public key exported: device-key-' + r.fingerprint + '.pub'; showToast('', 'ok'); }
+ catch (e) { $('export-stat').textContent = 'Export failed: ' + e.message; showToast('', 'error'); }
+ });
+ const expTsa = $('export-tsa-key');
+ if (expTsa) expTsa.addEventListener('click', async () => {
+ try { const r = await exportTsaPub(); $('export-stat').textContent = 'TSA public key exported: tsa-key-' + r.fingerprint + '.pub'; showToast('TSA', 'ok'); }
+ catch (e) { $('export-stat').textContent = 'Export failed: ' + e.message; showToast('', 'error'); }
+ });
+
+ let pending = null;
+ $('restore-input').addEventListener('change', async (e) => {
+ const file = e.target.files && e.target.files[0];
+ if (!file) { pending = null; return; }
+ try {
+ pending = JSON.parse(await file.text());
+ const err = validBackup(pending);
+ $('restore-stat').textContent = err ? err : 'Valid backup: ' + pending.createdAt + ' \u00b7 ' + JSON.stringify(pending.counts);
+ showToast(err ? 'Backup invalid' : 'Backup valid', err ? 'error' : 'ok');
+ } catch (err) {
+ pending = null;
+ $('restore-stat').textContent = 'Cannot parse JSON: ' + err.message;
+ showToast('JSON invalid / JSON', 'error');
+ }
+ });
+
+ $('verify-btn').addEventListener('click', () => {
+ if (!pending) return showToast('Please select a backup file first', 'error');
+ const err = validBackup(pending);
+ $('restore-stat').textContent = err || ('Structure OK' + Object.values(pending.counts).reduce((a, n) => a + n, 0) + ' records · trail entries: ' + (pending.auditTrail || []).length);
+ showToast(err ? 'Verification failed' : 'Verification OK', err ? 'error' : 'ok');
+ });
+
+ $('restore-btn').addEventListener('click', async () => {
+ if (!pending) return showToast('Please select a backup file first', 'error');
+ const err = validBackup(pending);
+ if (err) return showToast(err, 'error');
+ if (!$('confirm-restore').checked) return showToast('Please confirm replacement', 'error');
+ if (!window.confirm('Replace ALL local cases with this backup? This cannot be undone.')) return;
+ try {
+ const db = await openDB();
+ try { await writeAll(db, pending.stores); } finally { db.close(); }
+ if (pending.localStorage) for (const [k, v] of Object.entries(pending.localStorage)) localStorage.setItem(k, v);
+ const total = Object.values(pending.counts).reduce((a, n) => a + n, 0);
+ $('restore-stat').textContent = 'Restored ' + total + ' records; backup dated ' + pending.createdAt;
+ showToast('Wiederhergestellt', 'ok');
+ } catch (e) { $('restore-stat').textContent = 'Restore failed: ' + e.message; showToast('Restore failed', 'error'); }
+ });
+</script>
+</body>
+</html>

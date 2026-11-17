@@ -1,0 +1,465 @@
+/*
+ * FieldSeal Suite — Copyright (c) 2026 FieldSeal Suite contributors. All rights reserved.
+ * SPDX-License-Identifier: MIT
+ * License: MIT (see LICENSE); AS IS, no warranty.
+ * Ownership: FieldSeal Suite.
+ */
+:root {
+ color-scheme: dark;
+ --bg: #0b0b0d;
+ --surface: #161619;
+ --surface-2: #1e1e22;
+ --line: #2c2c31;
+ --text: #f5f5f7;
+ --muted: #98989f;
+ --accent: #0a84ff;
+ --good: #30d158;
+ --warn: #ffd60a;
+ --bad: #ff453a;
+ --radius: 14px;
+}
+
+/* Shared accessibility chrome (mounted by pwa/ui/page-chrome.js on every page). */
+.visually-hidden {
+ position: absolute !important; width: 1px; height: 1px;
+ padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0);
+ white-space: nowrap; border: 0;
+}
+.skip-link {
+ position: absolute; left: 12px; top: -60px; z-index: 999;
+ padding: 10px 16px; border-radius: 0 0 10px 10px;
+ background: var(--accent); color: #fff; font-weight: 700;
+ text-decoration: none; transition: top .15s ease;
+}
+.skip-link:focus { top: 0; outline: 2px solid #fff; outline-offset: 2px; }
+.legal-links {
+ display: flex; flex-wrap: wrap; gap: 8px 18px;
+ justify-content: center; margin-top: 10px;
+ font-size: 12px;
+}
+.legal-links a { color: var(--accent); text-decoration: underline; }
+.legal-links a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+* { box-sizing: border-box; }
+
+body {
+ margin: 0;
+ min-height: 100vh;
+ background: var(--bg);
+ color: var(--text);
+ font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+ -webkit-font-smoothing: antialiased;
+}
+
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.wrap { max-width: 880px; margin: 0 auto; padding: 28px 20px 64px; }
+
+.topbar {
+ display: flex;
+ align-items: center;
+ justify-content: space-between;
+ gap: 16px;
+ padding-bottom: 20px;
+ border-bottom: 1px solid var(--line);
+ margin-bottom: 28px;
+}
+
+.brand { display: flex; align-items: center; gap: 12px; }
+.brand img { width: 34px; height: 34px; }
+.brand h1 { font-size: 18px; font-weight: 600; margin: 0; letter-spacing: .01em; }
+.brand p { margin: 0; font-size: 12px; color: var(--muted); }
+
+.net-state {
+ font-size: 12px;
+ color: var(--good);
+ border: 1px solid var(--line);
+ border-radius: 999px;
+ padding: 5px 12px;
+ white-space: nowrap;
+}
+.net-state.offline { color: var(--warn); }
+
+/* v0.5 i18n language switcher */
+/* 16px is the iOS Safari threshold: any form control below it auto-zooms the
+   viewport on focus. `.lang-switch` (0,1,0) outranks the bare `select` rule
+   (0,0,1), so the size has to be stated here explicitly. */
+.lang-switch-host { margin-left: 10px; }
+.lang-switch {
+ font: inherit;
+ font-size: 16px;
+ color: var(--text);
+ background: var(--surface-2);
+ border: 1px solid var(--line);
+ border-radius: 999px;
+ padding: 4px 10px;
+ cursor: pointer;
+}
+
+h2 { font-size: 15px; font-weight: 600; margin: 0 0 12px; }
+h3 { font-size: 14px; font-weight: 600; margin: 0 0 8px; }
+p.hint { color: var(--muted); font-size: 13px; margin: 0 0 14px; }
+
+.card {
+ background: var(--surface);
+ border: 1px solid var(--line);
+ border-radius: var(--radius);
+ padding: 20px;
+ margin-bottom: 18px;
+}
+
+.steps { display: flex; gap: 8px; flex-wrap: wrap; margin: 0 0 18px; }
+.step {
+ flex: 1 1 150px;
+ text-align: center;
+ font-size: 12px;
+ color: var(--muted);
+ border: 1px solid var(--line);
+ border-radius: 999px;
+ padding: 8px 10px;
+}
+.step.active { color: var(--text); border-color: var(--accent); background: rgba(10,132,255,.12); }
+
+.status-line {
+ display: flex; align-items: center; gap: 10px;
+ font-size: 13px; color: var(--muted); margin-bottom: 18px;
+}
+.status-badge {
+ display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+ background: var(--muted);
+}
+.status-badge[data-step="packed"] { background: var(--warn); }
+.status-badge[data-step="download"] { background: var(--good); }
+
+.row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+.btn {
+ appearance: none;
+ border: 1px solid var(--line);
+ background: var(--surface-2);
+ color: var(--text);
+ font: inherit;
+ font-size: 14px;
+ padding: 10px 16px;
+ border-radius: 10px;
+ cursor: pointer;
+ transition: background .15s ease, border-color .15s ease, opacity .15s ease;
+}
+.btn:hover { border-color: var(--accent); }
+.btn:disabled { opacity: .4; cursor: not-allowed; }
+.btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 600; }
+.btn-primary:hover { background: #3b9bff; }
+.btn-ghost { background: transparent; }
+.btn-danger { color: var(--bad); }
+
+label.field { display: block; font-size: 13px; color: var(--muted); margin-bottom: 14px; }
+label.field > span { display: block; margin-bottom: 6px; }
+/* Data-subject-rights select: wide enough on desktop, but it must not push the
+   row past a 390px viewport (iPhone) — the details box clips the overflow. */
+.rights-field { min-width: 220px; }
+
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]),
+textarea, select {
+ width: 100%;
+ background: var(--bg);
+ color: var(--text);
+ border: 1px solid var(--line);
+ border-radius: 10px;
+ padding: 10px 12px;
+ font: inherit;
+ font-size: 14px;
+ outline: 2px solid transparent;
+ outline-offset: 2px;
+}
+input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+/* WCAG 2.4.7: a clearly visible focus indicator. Applied on :focus-visible (keyboard)
+ AND :focus (programmatic focus used by assistive tech and automated checks) so every
+ interactive element shows a 2px outline on all eight pages. */
+:is(input, textarea, select, button, a, [tabindex]):focus-visible,
+:is(input, textarea, select, button, a, [tabindex]):focus {
+ outline: 2px solid var(--accent);
+ outline-offset: 2px;
+}
+textarea { resize: vertical; min-height: 76px; }
+
+.grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 620px) { .grid-2 { grid-template-columns: 1fr; } }
+
+.radio-group { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+.radio-group label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+
+.check { display: flex; align-items: flex-start; gap: 9px; font-size: 14px; cursor: pointer; }
+.check input { margin-top: 3px; }
+
+.file-list { list-style: none; padding: 0; margin: 14px 0 0; }
+.file-item {
+ display: flex; align-items: center; gap: 12px;
+ padding: 11px 0; border-top: 1px solid var(--line);
+}
+.file-item .thumb { width: 42px; height: 42px; border-radius: 8px; background: var(--surface-2); flex: none; }
+.file-meta { flex: 1; min-width: 0; }
+.file-meta strong { display: block; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.file-meta small { display: block; color: var(--muted); font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.file-item .btn { padding: 6px 10px; font-size: 12px; }
+
+.preview-video {
+ width: 100%; max-height: 260px; background: #000;
+ border-radius: 10px; margin-top: 12px; display: none;
+}
+
+.notice {
+ border-left: 3px solid var(--warn);
+ background: rgba(255,214,10,.08);
+ padding: 10px 14px; border-radius: 6px;
+ font-size: 13px; color: #f0e2a8; margin: 12px 0;
+}
+
+.result { display: none; }
+.result.visible { display: block; }
+.mono {
+ font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+ font-size: 12px; word-break: break-all; color: var(--muted);
+}
+/* High-contrast monospace inside the tinted emergency notice (WCAG 1.4.3). */
+.notice .mono { color: var(--text); }
+details summary { cursor: pointer; color: var(--muted); font-size: 13px; margin: 12px 0 8px; }
+pre {
+ background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+ padding: 14px; overflow-x: auto; font-size: 12px; line-height: 1.5;
+ white-space: pre-wrap; word-break: break-word;
+}
+
+.nav-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+@media (max-width: 620px) { .nav-grid { grid-template-columns: 1fr; } }
+.nav-card {
+ display: block; background: var(--surface); border: 1px solid var(--line);
+ border-radius: var(--radius); padding: 24px; color: var(--text);
+}
+.nav-card:hover { border-color: var(--accent); text-decoration: none; }
+.nav-card h2 { font-size: 17px; margin: 0 0 8px; }
+.nav-card p { color: var(--muted); font-size: 13px; margin: 0; }
+.nav-card.disabled { opacity: .55; }
+
+footer {
+ border-top: 1px solid var(--line);
+ margin-top: 32px; padding-top: 18px;
+ color: var(--muted); font-size: 12px;
+}
+footer p { margin: 0 0 8px; }
+
+.toast-host { position: fixed; right: 18px; bottom: 18px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
+.toast {
+ background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px;
+ padding: 11px 15px; font-size: 13px; max-width: 340px;
+ box-shadow: 0 8px 30px rgba(0,0,0,.35); transition: opacity .4s ease;
+}
+.toast-ok { border-color: var(--good); }
+.toast-warn { border-color: var(--warn); }
+.toast-error { border-color: var(--bad); }
+.toast-out { opacity: 0; }
+
+.dialog-overlay {
+ position: fixed; inset: 0; background: rgba(0,0,0,.6);
+ display: flex; align-items: center; justify-content: center; padding: 20px; z-index: 60;
+}
+.dialog {
+ background: var(--surface); border: 1px solid var(--line);
+ border-radius: var(--radius); padding: 22px; max-width: 440px; width: 100%;
+}
+.dialog p { color: var(--muted); font-size: 14px; }
+.dialog-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+
+/* ---- case-layer UI shell ---- */
+.state-badge {
+ font-size: 11px; padding: 3px 10px; border-radius: 999px;
+ border: 1px solid var(--line); white-space: nowrap; font-weight: 600;
+}
+.state-draft { color: var(--warn); border-color: var(--warn); }
+.state-pending { color: var(--bad); border-color: var(--bad); }
+.state-sealed { color: var(--good); border-color: var(--good); }
+/* WCAG 1.4.3: the pending-configuration badge previously inherited a thin red
+ border with low-contrast text. Give it an explicit high-contrast dark surface. */
+.state-badge.state-pending-configuration {
+ color: #ffe9e7; background: #4a1c19; border-color: #ff8d84;
+}
+
+.case-list { list-style: none; padding: 0; margin: 0; }
+.case-row { display: flex; align-items: center; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); }
+.case-row:first-child { border-top: none; }
+.case-main { flex: 1; min-width: 0; }
+.case-title { font-size: 14px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.case-sub { font-size: 12px; color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; margin-top: 2px; }
+.case-actions { display: flex; gap: 8px; }
+
+.kv { display: grid; grid-template-columns: 150px 1fr; gap: 6px 14px; font-size: 13px; margin: 0; }
+.kv dt { color: var(--muted); }
+.kv dd { margin: 0; }
+
+.field-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 2px; }
+.field-pill { font-size: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; background: var(--surface-2); }
+.field-pill .ft { color: var(--muted); margin-left: 6px; }
+.field-pill .fr { color: var(--warn); margin-left: 6px; }
+.field-pill .fo { color: var(--muted); display: block; font-size: 11px; margin-top: 2px; }
+
+.section-empty { color: var(--muted); font-size: 13px; font-style: italic; }
+.phase-note {
+ border-left: 3px solid var(--accent); background: rgba(10,132,255,.08);
+ padding: 10px 14px; border-radius: 6px; font-size: 13px; margin: 12px 0;
+}
+.log-list { list-style: none; padding: 0; margin: 0; }
+.log-item { padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; }
+.log-item:first-child { border-top: none; }
+.log-item .lm { color: var(--muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 12px; }
+
+/* ---- v0.5 DOM custody / audit timeline (no canvas) ---- */
+.timeline { border-left: 2px solid var(--line); margin: 6px 0 0 8px; padding: 0 0 0 4px; }
+.tl-node { position: relative; padding: 8px 0 8px 20px; cursor: pointer; outline: 2px solid transparent; outline-offset: 2px; }
+.tl-node:hover { background: rgba(10,132,255,.06); }
+.tl-node:focus-visible { background: rgba(10,132,255,.12); }
+.tl-dot { position: absolute; left: -7px; top: 14px; width: 12px; height: 12px; border-radius: 50%; background: var(--muted); border: 2px solid #fff; box-shadow: 0 0 0 1px var(--line); }
+.tl-draft .tl-dot { background: var(--warn); }
+.tl-pending .tl-dot { background: var(--bad); }
+.tl-sealed .tl-dot { background: var(--good); }
+.tl-tampered .tl-dot { background: var(--bad); }
+.tl-custody .tl-dot { background: var(--accent); }
+.tl-note .tl-dot { background: #2f6fdb; }
+.tl-time { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 11px; color: var(--muted); }
+.tl-title { font-weight: 600; font-size: 13px; }
+.tl-summary { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.tl-detail { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); font-size: 12px; }
+.tl-detail pre { white-space: pre-wrap; word-break: break-word; margin: 0; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+.verify-result { font-weight: 600; }
+.verify-result.ok { color: var(--good); }
+.verify-result.tampered { color: var(--bad); }
+.verify-result.invalid_spec { color: var(--bad); }
+.back-link { font-size: 13px; color: var(--muted); margin-bottom: 16px; display: inline-block; }
+
+/* ---- v0.3 workflow / native browser print ---- */
+.state-banner {
+ border-left: 3px solid var(--accent); background: var(--surface-2);
+ padding: 12px 16px; border-radius: 8px; font-size: 13px; margin-bottom: 16px;
+}
+.state-pending-configuration { border-left-color: var(--bad); }
+.state-pending_countersign { border-left-color: var(--warn); }
+.state-sealed { border-left-color: var(--good); }
+.sig-preview {
+ display: block; max-width: 220px; max-height: 80px; margin-top: 8px;
+ border: 1px solid var(--line); border-radius: 6px; background: #fff;
+}
+.print-only { display: none; }
+/* Attribution layer 3: fixed signature in the status bar / footer. Never enters any manifest. */
+.attribution { font-size: 11px; opacity: .78; margin-top: 10px; letter-spacing: .01em; }
+/* v0.4 extension placeholders are hidden entirely while their featureFlag is false. */
+/* This is native browser print flow. Precision layout, custom font, advanced PDF features are out of core scope, use extension hook for pdf-lib/jspdf later. */
+/* ---- mobile / touch layout (<= 620px) ----
+ Touch targets >= 44px, 16px form text (no iOS auto-zoom), single-column data,
+ bottom-sheet dialogs and safe-area padding. Desktop layout above stays unchanged. */
+@media (max-width: 620px) {
+ html { -webkit-text-size-adjust: 100%; }
+ body { max-width: 100%; overflow-x: clip; }
+ .wrap { padding: 14px 12px calc(40px + env(safe-area-inset-bottom, 0px)); }
+
+ .topbar { flex-wrap: wrap; gap: 8px; padding-bottom: 12px; margin-bottom: 16px; }
+ .brand { flex: 1 1 100%; min-width: 0; gap: 9px; }
+ .brand img { width: 30px; height: 30px; flex: none; }
+ .brand > div { min-width: 0; }
+ .brand h1 { font-size: 16px; }
+ .brand p { font-size: 12px; line-height: 1.35; }
+ .net-state { margin-left: auto; font-size: 12px; padding: 6px 10px; }
+
+ .card { padding: 14px; margin-bottom: 12px; }
+ h2 { font-size: 16px; }
+ p.hint { font-size: 14px; }
+ .back-link { display: inline-flex; align-items: center; min-height: 44px; font-size: 14px; }
+
+ .steps { flex-wrap: nowrap; gap: 6px; }
+ .step { flex: 1 1 0; min-width: 0; font-size: 12px; line-height: 1.3; padding: 8px 4px; }
+ .status-line { align-items: flex-start; font-size: 14px; }
+ .status-badge { flex: none; width: 10px; height: 10px; margin-top: 7px; }
+
+ .row { gap: 8px; }
+ .btn, a.btn {
+ display: inline-flex; align-items: center; justify-content: center;
+ min-height: 46px; min-width: 46px; font-size: 15px; padding: 11px 14px;
+ touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+ }
+ .row > .btn { flex: 1 1 140px; }
+
+ label.field { font-size: 14px; margin-bottom: 12px; }
+ label.field > span { font-size: 13px; }
+ /* On narrow viewports the rights select takes its own row instead of overflowing. */
+ .rights-field { min-width: 0; width: 100%; }
+ input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]):not([type="hidden"]),
+ textarea, select { min-height: 46px; font-size: 16px; padding: 11px 12px; }
+ input[type="color"] { min-height: 46px; min-width: 56px; padding: 4px; }
+ input[type="checkbox"], input[type="radio"] { width: 18px; height: 18px; }
+ textarea { min-height: 96px; }
+ .check { min-height: 46px; align-items: center; }
+ .check input { margin: 0; }
+ .radio-group { gap: 8px 16px; }
+ .radio-group label { min-height: 46px; }
+ details summary { min-height: 44px; padding: 11px 0; font-size: 14px; margin: 8px 0; }
+
+ .grid-2, .nav-grid { grid-template-columns: 1fr; gap: 10px; }
+ .nav-card { padding: 16px; min-height: 84px; }
+
+ .kv { grid-template-columns: 1fr; gap: 2px 0; font-size: 14px; }
+ .kv dt { font-size: 12px; margin-top: 8px; }
+ .kv dd { overflow-wrap: anywhere; }
+ .mono, .case-sub, .log-item .lm, .file-meta small,
+ .attribution, .state-badge, .field-pill .fo { font-size: 12px; }
+ .field-pill { font-size: 13px; padding: 8px 10px; }
+
+ .case-row, .file-item { flex-wrap: wrap; }
+ .case-main, .case-actions { flex: 1 1 100%; }
+ .case-actions { flex-wrap: wrap; }
+ .file-meta { flex: 1 1 calc(100% - 60px); }
+ .case-actions .btn, .file-item .btn { flex: 1 1 auto; min-height: 44px; font-size: 13px; }
+ table { max-width: 100%; }
+ th, td { overflow-wrap: anywhere; }
+ pre { font-size: 12px; }
+
+ .dialog-overlay { padding: 0; align-items: flex-end; }
+ .dialog {
+ max-width: none; width: 100%; max-height: 88vh; overflow-y: auto;
+ padding: 18px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+ border-radius: 18px 18px 0 0; border-bottom: none;
+ }
+ .dialog-actions { flex-wrap: wrap; gap: 8px; }
+ .dialog-actions > .btn { flex: 1 1 100%; }
+ .toast-host { left: 12px; right: 12px; bottom: calc(12px + env(safe-area-inset-bottom, 0px)); }
+ .toast { max-width: none; }
+ footer { margin-top: 24px; }
+}
+
+@media print {
+ .no-print, .topbar, footer, .back-link { display: none !important; }
+ .print-only { display: block !important; }
+ body { background: #fff; color: #111; }
+ .timeline .tl-detail { box-shadow: none; }
+ .tl-node { break-inside: avoid; }
+}
+
+/* U9: visible focus + reduced motion (a11y). */
+:focus-visible { outline: 3px solid #1a73e8; outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+ *, *::before, *::after { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
+}
+
+/* U2: high-contrast mode. Both the OS `prefers-contrast: more` media query and an explicit
+ `.forced-contrast` class (toggled at runtime for headless testing) are supported. */
+@media (prefers-contrast: more) {
+ :root, body { --bg: #000 !important; --fg: #fff !important; --muted: #fff !important; --accent: #ff0 !important; --border: #fff !important; --card: #000 !important; }
+ body { background: #000 !important; color: #fff !important; }
+ .card, .panel, .dialog, .btn, input, select, textarea { background: #000 !important; color: #fff !important; border-color: #fff !important; }
+ a, .link, .btn-primary { color: #ff0 !important; }
+ .btn { border: 2px solid #fff !important; }
+ img, .thumb { filter: contrast(1.4); }
+}
+.forced-contrast { --bg: #000 !important; --fg: #fff !important; --muted: #fff !important; --accent: #ff0 !important; --border: #fff !important; --card: #000 !important; background: #000 !important; color: #fff !important; }
+.forced-contrast .card, .forced-contrast .panel, .forced-contrast .dialog, .forced-contrast .btn, .forced-contrast input, .forced-contrast select, .forced-contrast textarea { background: #000 !important; color: #fff !important; border-color: #fff !important; }
+.forced-contrast a, .forced-contrast .link, .forced-contrast .btn-primary { color: #ff0 !important; }
+.forced-contrast .btn { border: 2px solid #fff !important; }
+.forced-contrast img, .forced-contrast .thumb { filter: contrast(1.4); }
